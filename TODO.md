@@ -11,15 +11,16 @@
 - [x] refactor `set_entry` to NOT use `decscribe.py`, but ONLY Lua + FFI
     - [x] attach a todo's vcal form to every todo_json
     - [x] actual refactor
-- [ ] fork libdecsync to silence/redirect Logging
-- [ ] separate collections between each other
+- [x] fork libdecsync to silence/redirect Logging
+- [ ] separate collections between each other; add `:Decscribe COLLECTION`
 - [ ] remove `decscribe.py` completely | optimize libdecsync calls (too slow currently)
     - is it python?
     - is it ical parsing?
     - is it costly all-entries-recalculations?
+    - everything is fast except (some part of decscribe.py) (maybe executing ALL entries too often?)
 - [ ] edit and save todos (simple view of raw VDIR of given item)
-- [ ] `:Decscribe PATH-TO-COLLECTION`
-- [ ] `:Decscribe NAME-OF-PRECONFIGURED-COLLECTION`
+- [ ] `:Decscribe COLLECTION PATH-TO-DECSYNC-DIR`
+- [ ] `:Decscribe COLLECTION NAME-OF-PRECONFIGURED-DECSYNC-DIR`
 - [ ] edit many todos simultaneously, *in the list*
 - [ ] complex todo view, like Octo's PR view
 - [ ] categories
