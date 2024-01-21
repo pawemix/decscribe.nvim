@@ -31,8 +31,8 @@ except DecsyncException as e:
     print(e, file=stderr)
     exit(1)
 
-collections = Decsync.list_collections(decsync_dir, sync_type)
-collection = collections[0]
+collections: list[str] = Decsync.list_collections(decsync_dir, sync_type)
+collection = collections[0] # FIXME: wow, that's a nice hardcode
 decsync = Decsync(decsync_dir, sync_type, collection, app_id)
 
 
