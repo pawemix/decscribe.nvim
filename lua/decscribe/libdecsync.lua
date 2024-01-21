@@ -1,3 +1,6 @@
+local ffi = nil
+local lds = nil
+
 local M = {}
 
 ---@enum SyncType
@@ -8,8 +11,8 @@ M.SyncType = {
 
 
 function M.check_decsync_info(decsync_dir)
-	local ffi = require("ffi")
-	local lds = ffi.load("libdecsync")
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
 	ffi.cdef([[
 		static int decsync_so_check_decsync_info(const char* decsync_dir);
 	]])
@@ -17,8 +20,8 @@ function M.check_decsync_info(decsync_dir)
 end
 
 function M.get_app_id(app_name)
-	local ffi = require("ffi")
-	local lds = ffi.load("libdecsync")
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
 	ffi.cdef([[
 		static void decsync_so_get_app_id(
 			const char* app_name,
@@ -37,12 +40,11 @@ end
 ---@param decsync_dir string
 ---@param sync_type SyncType
 function M.list_collections(decsync_dir, sync_type)
-
 	decsync_dir = decsync_dir or ""
 	sync_type = sync_type or ""
 
-	local ffi = require("ffi")
-	local lds = ffi.load("libdecsync")
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
 
 	ffi.cdef([[
 		static int decsync_so_list_collections(
