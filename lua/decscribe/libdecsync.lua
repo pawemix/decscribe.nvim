@@ -66,7 +66,6 @@ function M.list_collections(decsync_dir, sync_type)
 		collections_cap
 	)
 
-	print(collections_count)
 	-- accumulate the collections from C array to Lua table
 	local collections = {}
 	for idx = 0, collections_count - 1 do
