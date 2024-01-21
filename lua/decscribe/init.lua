@@ -1,13 +1,37 @@
 local M = {}
 
+-- Type Definitions
+-------------------
+
+---@alias Ical string
+
+---@class Todo
+---@field uid string
+---@field collection string
+---@field summary string
+---@field description string
+---@field completed boolean
+---@field priority string
+---@field ical Ical
+local Todo = {}
+
+-- Constants
+------------
+
 local PLUGIN_ROOT = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h")
+
+-- Global State
+---------------
 
 ---@type integer?
 local main_buf_nr = nil
----@type table[]
+---@type Todo[]
 local todos = {}
 ---@type string[]
 local lines = {}
+
+-- Functions
+------------
 
 local function repopulate_buffer()
 	if main_buf_nr == nil then return end
