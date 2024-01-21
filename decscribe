@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+
+from functools import partial
+from json import dump as json_dump
+from json import loads as json_loads
+from pathlib import Path
+from sys import argv, stderr, stdin
+
+from icalendar import Todo
+from libdecsync import Decsync, DecsyncException
+
+# types
+
+UID = str
+
+# utils BEGIN
+
+infolog = partial(print, "INFO:", file=stderr)
+
+# utils END
+
+decsync_dir = str(Path.home() / "some-ds-dir") # XXX: hardcoded directory
+sync_type = "tasks"
+app_id = Decsync.get_app_id("decscribe")
+
+try:
+    Decsync.check_decsync_info(decsync_dir)
+except DecsyncException as e:
+    print(e, file=stderr)
+    exit(1)
+
+collections = Decsync.list_collections(decsync_dir, sync_type)
+collection = collections[0]
+decsync = Decsync(decsync_dir, sync_type, collection, app_id)
+
+
+todos: dict[UID, Todo] = {}
+
+
+def on_info_updated(path, datetime, key, value, extra):
+    match key:
+        case "deleted":
+            #  infolog(f"Value {value} got deleted.")
+            pass
+            #  if value:
+            #  extra.delete(update_decsync=False)
+        case "color":
+            # extra._set_meta_key("ICAL:calendar-color", value, update_decsync=False)
+            pass
+        case "name":
+            # extra._set_meta_key("D:displayname", value, update_decsync=False)
+            pass
+        case _:
+            pass
+            #  raise ValueError("Unknown info key: '%s'." % key)
+
+    print(
+        "On info updated: %s %s %s %s %s" % (path, datetime, key, value, extra),
+        file=stderr,
+    )
+
+
+def on_entries_updated(path, datetime, key, value, extra):
+    if len(path) != 1:
+        pass
+        #  raise ValueError("Invalid path: '%s'." % str(path))
+    uid = path[0]
+    if value is None:
+        del todos[uid]
+    else:
+        todos[uid] = Todo.from_ical(value).walk("VTODO")[0]
+
+
+if len(argv) > 1 and argv[1] != "":
+    outfile_path = argv[1]
+else:
+    outfile_path = None
+
+decsync.add_listener(["info"], on_info_updated)
+decsync.add_listener(["resources"], on_entries_updated)
+
+# list out collections and their entries
+sync_type = "tasks"
+for collection in Decsync.list_collections(decsync_dir, sync_type):
+    is_deleted = Decsync.get_static_info(decsync_dir, sync_type, collection, "deleted")
+    if is_deleted is True:
+        print(f"INFO: collection {collection} is deleted", file=stderr)
+        continue
+extra = {}
+
+decsync.init_stored_entries()
+decsync.execute_stored_entries_for_path_exact(["info"], extra)
+decsync.execute_stored_entries_for_path_prefix(["resources"], extra)
+decsync.init_done()
+
+todos_output_json: list[dict] = []
+
+for todo in todos.values():
+    uid = todo.get("UID")
+    uid = str(uid) if uid is not None else None
+    summary = todo.get("SUMMARY")
+    summary = str(summary) if summary is not None else None
+    description = todo.get("DESCRIPTION")
+    description = str(description) if description is not None else None
+    status = todo.get("STATUS")
+    status = str(status) if status is not None else None
+    priority = todo.get("PRIORITY")
+    priority = int(priority) if priority is not None else None
+
+    percent_complete = todo.get("PERCENT-COMPLETE")
+    percent_complete = int(percent_complete) if percent_complete is not None else None
+    related_to = todo.get("RELATED-TO")
+
+    completed = False
+    if status is not None and status.upper() == "COMPLETED":
+        completed = True
+    elif percent_complete is not None and percent_complete == 100:
+        completed = True
+
+    todos_output_json.append(
+        {
+            "uid": uid,
+            "summary": summary,
+            "description": description,
+            "completed": completed,
+            "priority": priority,
+        }
+    )
+
+if outfile_path is not None:
+    with open(outfile_path, "w") as outfile:
+        json_dump(todos_output_json, outfile)
+
+for line in stdin:
+    todo_json = json_loads(line)
+    uid = todo_json["uid"]
+    orig_todo = todos[uid].copy()
+    orig_todo["STATUS"] = todo_json["completed"] and "COMPLETED" or "NEEDS-ACTION"
+    orig_todo["SUMMARY"] = todo_json["summary"]
+
+    # FIXME: tasks.org-created todos are additionally wrapped in VCALENDAR. Is
+    # it neeeded? solution: don't unwrap with walk('VTODO') permanently, but
+    # only look into when reading/updating
+    decsync.set_entry(["resources", uid], None, orig_todo.to_ical().decode())
+
+#  decsync.add_listener(["info"], info_listener)
+
+
+#  self.decsync.add_listener(["resources"], resources_listener)
+
+
+#  def upload(self, href, orig_item, update_decsync=True):
+#  item = super().upload(href, orig_item)
+#  if update_decsync:
+#  tag = self.get_meta("tag")
+#  if tag == "VCALENDAR":
+#  supported_components = (
+#  self.get_meta("C:supported-calendar-component-set")
+#  or "VEVENT,VTODO,VJOURNAL"
+#  ).split(",")
+#  component_name = item.component_name
+#  if len(supported_components) > 1 and component_name != "VEVENT":
+#  raise RuntimeError(
+#  "Component "
+#  + component_name
+#  + " is not supported by old DecSync collections. Create a new collection in Radicale for support."
+#  )
+#  self.set_href(item.uid, href)
+#  self.decsync.set_entry(["resources", item.uid], None, item.serialize())
+#  return item
+
+
+#  def delete(self, href=None, update_decsync=True):
+#  if update_decsync:
+#  if href is None:
+#  self.decsync.set_entry(["info"], "deleted", True)
+#  else:
+#  uid = self.get_uid(href)
+#  self.decsync.set_entry(["resources", uid], None, None)
+#  super().delete(href)
+
+
+#  def set_meta(self, props, update_decsync=True):
+#  for key, value in props.items():
+#  old_value = self.get_meta(key)
+#  if old_value == value:
+#  continue
+#  if key == "D:displayname":
+#  if update_decsync:
+#  self.decsync.set_entry(["info"], "name", value)
+#  elif key == "ICAL:calendar-color":
+#  if update_decsync:
+#  self.decsync.set_entry(["info"], "color", value)
+#  elif key == "C:supported-calendar-component-set" and old_value != None:
+# Changing the supported components is not allowed
+#  props[key] = old_value
+#  super().set_meta(props)
+
+
+#  def sync(self, old_token=None):
+#  if hasattr(self, "decsync"):
+#  self.decsync.execute_all_new_entries(self)
+#  return super().sync(old_token)
