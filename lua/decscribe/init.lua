@@ -1,3 +1,5 @@
+local lds = require("decscribe.libdecsync")
+
 local M = {}
 
 -- Type Definitions
@@ -17,6 +19,8 @@ local Todo = {}
 
 -- Constants
 ------------
+
+local APP_NAME = "decscribe"
 
 local PLUGIN_ROOT = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h")
 
@@ -135,13 +139,12 @@ function M.setup()
 
 				if not has_changed then goto continue end
 
-				-- execute `decscribe` utility and send changed todo to it
-				vim.fn.systemlist(
-					{ PLUGIN_ROOT .. "/decscribe" },
-					{ vim.fn.json_encode(changed_todo) }
-				)
-				if vim.v.shell_error ~= 0 then
-					error("decscribe.py failed when updating the todos")
+				local app_id = lds.get_app_id(APP_NAME)
+
+				local update_todo_err =
+					lds.update_todo(DECSYNC_DIR, app_id, changed_todo)
+				if update_todo_err then
+					error("There was a problem updating the todos!")
 				else
 					-- updating succeeded
 					vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
