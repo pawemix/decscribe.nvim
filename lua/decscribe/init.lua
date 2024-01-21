@@ -182,16 +182,4 @@ function M.setup()
 	end, {})
 end
 
---[[
-local ffi = require("ffi")
-local lds = ffi.load("libdecsync")
--- important to NOT use inline C functions!
-ffi.cdef("int decsync_so_check_decsync_info(const char* decsync_dir)")
-
-local buf = ffi.new("const char[25]", decsync_dir)
-print(lds.decsync_so_check_decsync_info(buf))
-print(lds.decsync_so_check_decsync_info(decsync_dir))
-
-]]
-
 return M
