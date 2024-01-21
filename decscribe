@@ -12,6 +12,7 @@ from libdecsync import Decsync, DecsyncException
 # types
 
 UID = str
+Ical = bytes
 
 # utils BEGIN
 
@@ -35,7 +36,7 @@ collection = collections[0]
 decsync = Decsync(decsync_dir, sync_type, collection, app_id)
 
 
-todos: dict[UID, Todo] = {}
+todos: dict[UID, tuple[Ical, Todo]] = {}
 
 
 def on_info_updated(path, datetime, key, value, extra):
@@ -69,7 +70,7 @@ def on_entries_updated(path, datetime, key, value, extra):
     if value is None:
         del todos[uid]
     else:
-        todos[uid] = Todo.from_ical(value).walk("VTODO")[0]
+        todos[uid] = (value, Todo.from_ical(value))
 
 
 if len(argv) > 1 and argv[1] != "":
@@ -96,21 +97,22 @@ decsync.init_done()
 
 todos_output_json: list[dict] = []
 
-for todo in todos.values():
-    uid = todo.get("UID")
+for ical, todo in todos.values():
+    vtodo = todo.walk("VTODO")[0]
+    uid = vtodo.get("UID")
     uid = str(uid) if uid is not None else None
-    summary = todo.get("SUMMARY")
+    summary = vtodo.get("SUMMARY")
     summary = str(summary) if summary is not None else None
-    description = todo.get("DESCRIPTION")
+    description = vtodo.get("DESCRIPTION")
     description = str(description) if description is not None else None
-    status = todo.get("STATUS")
+    status = vtodo.get("STATUS")
     status = str(status) if status is not None else None
-    priority = todo.get("PRIORITY")
+    priority = vtodo.get("PRIORITY")
     priority = int(priority) if priority is not None else None
 
-    percent_complete = todo.get("PERCENT-COMPLETE")
+    percent_complete = vtodo.get("PERCENT-COMPLETE")
     percent_complete = int(percent_complete) if percent_complete is not None else None
-    related_to = todo.get("RELATED-TO")
+    related_to = vtodo.get("RELATED-TO")
 
     completed = False
     if status is not None and status.upper() == "COMPLETED":
@@ -125,6 +127,7 @@ for todo in todos.values():
             "description": description,
             "completed": completed,
             "priority": priority,
+            "ical": ical,
         }
     )
 
@@ -135,13 +138,11 @@ if outfile_path is not None:
 for line in stdin:
     todo_json = json_loads(line)
     uid = todo_json["uid"]
-    orig_todo = todos[uid].copy()
-    orig_todo["STATUS"] = todo_json["completed"] and "COMPLETED" or "NEEDS-ACTION"
-    orig_todo["SUMMARY"] = todo_json["summary"]
+    orig_todo = todos[uid][1]
+    orig_todo_vtodo = orig_todo.walk("VTODO")[0]
+    orig_todo_vtodo["STATUS"] = todo_json["completed"] and "COMPLETED" or "NEEDS-ACTION"
+    orig_todo_vtodo["SUMMARY"] = todo_json["summary"]
 
-    # FIXME: tasks.org-created todos are additionally wrapped in VCALENDAR. Is
-    # it neeeded? solution: don't unwrap with walk('VTODO') permanently, but
-    # only look into when reading/updating
     decsync.set_entry(["resources", uid], None, orig_todo.to_ical().decode())
 
 #  decsync.add_listener(["info"], info_listener)
