@@ -20,6 +20,9 @@ local Todo = {}
 
 local PLUGIN_ROOT = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h")
 
+-- XXX: hardcoded decsync dir
+local DECSYNC_DIR = vim.env.HOME .. "/some-ds-dir"
+
 -- Global State
 ---------------
 
@@ -159,10 +162,7 @@ function M.setup()
 		if main_buf_nr == nil then
 			main_buf_nr = vim.api.nvim_create_buf(true, false)
 
-			-- XXX: hardcoded decsync dir
-			local decsync_dir = vim.env.HOME .. "/some-ds-dir"
-
-			vim.api.nvim_buf_set_name(main_buf_nr, "decscribe://" .. decsync_dir)
+			vim.api.nvim_buf_set_name(main_buf_nr, "decscribe://" .. DECSYNC_DIR)
 			vim.api.nvim_buf_set_option(main_buf_nr, "filetype", "decscribe")
 			vim.api.nvim_buf_set_option(main_buf_nr, "buftype", "acwrite")
 			-- vim.api.nvim_buf_set_option(bufnr, "number", false)
