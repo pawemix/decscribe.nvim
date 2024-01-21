@@ -39,6 +39,7 @@ end
 
 ---@param decsync_dir string
 ---@param sync_type SyncType
+---@return string[] collections
 function M.list_collections(decsync_dir, sync_type)
 	decsync_dir = decsync_dir or ""
 	sync_type = sync_type or ""
