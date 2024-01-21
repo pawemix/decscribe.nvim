@@ -19,7 +19,8 @@ infolog = partial(print, "INFO:", file=stderr)
 
 # utils END
 
-decsync_dir = str(Path.home() / "some-ds-dir") # XXX: hardcoded directory
+# XXX: hardcoded directory
+decsync_dir = str(Path.home() / "some-ds-dir")
 sync_type = "tasks"
 app_id = Decsync.get_app_id("decscribe")
 
