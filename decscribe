@@ -101,6 +101,7 @@ for ical, todo in todos.values():
     vtodo = todo.walk("VTODO")[0]
     uid = vtodo.get("UID")
     uid = str(uid) if uid is not None else None
+    collection = collections[0]
     summary = vtodo.get("SUMMARY")
     summary = str(summary) if summary is not None else None
     description = vtodo.get("DESCRIPTION")
@@ -123,6 +124,7 @@ for ical, todo in todos.values():
     todos_output_json.append(
         {
             "uid": uid,
+            "collection": collection,
             "summary": summary,
             "description": description,
             "completed": completed,
