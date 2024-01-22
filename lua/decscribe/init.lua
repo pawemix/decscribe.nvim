@@ -1,4 +1,5 @@
 local lds = require("decscribe.libdecsync")
+local ic = require("decscribe.ical")
 
 local M = {}
 
@@ -30,6 +31,8 @@ local DECSYNC_DIR = vim.env.HOME .. "/some-ds-dir"
 -- Global State
 ---------------
 
+---@type Connection
+local conn = nil
 ---@type integer?
 local main_buf_nr = nil
 ---@type Todo[]
@@ -43,6 +46,36 @@ local lines = {}
 local function repopulate_buffer()
 	if main_buf_nr == nil then return end
 	assert(main_buf_nr ~= nil)
+
+	local colls = lds.list_collections(DECSYNC_DIR, "tasks")
+	local fst_coll = colls[1]
+	conn = lds.connect(DECSYNC_DIR, "tasks", fst_coll, lds.get_app_id(APP_NAME))
+
+	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
+		assert(#path == 1, "Unexpected path length while reading updated entry")
+		local todo_uid = path[1]
+		if value == nil then
+			-- nil value means entry was deleted
+			todos[todo_uid] = nil
+			return
+		end
+		local todo_ical = value
+		todos[todo_uid] = {
+			uid = todo_uid,
+			collection = fst_coll,
+			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
+			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
+			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
+			priority = ic.find_ical_prop(todo_ical, "PRIORITY") or "",
+			ical = todo_ical,
+		}
+	end)
+	lds.init_done(conn)
+
+	-- read all current data
+	lds.init_stored_entries(conn)
+	lds.execute_all_stored_entries_for_path_exact(conn, { "info" })
+	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
 
 	-- obtain initial data using `decscribe` utility
 	local tempfile = vim.fn.tempname()
