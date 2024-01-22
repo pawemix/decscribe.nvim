@@ -13,13 +13,16 @@ M.SyncType = {
 
 
 
+---TODO: capture actual well-typed return
+---
+---@return boolean ok whether the directory is valid decsync dir
 function M.check_decsync_info(decsync_dir)
 	ffi = ffi or require("ffi")
 	lds = lds or ffi.load("libdecsync")
 	ffi.cdef([[
 		static int decsync_so_check_decsync_info(const char* decsync_dir);
 	]])
-	return lds.decsync_so_check_decsync_info(decsync_dir)
+	return lds.decsync_so_check_decsync_info(decsync_dir) == 0
 end
 
 function M.get_app_id(app_name)
