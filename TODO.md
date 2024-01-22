@@ -12,19 +12,21 @@
     - [x] attach a todo's vcal form to every todo_json
     - [x] actual refactor
 - [x] fork libdecsync to silence/redirect Logging
-- [ ] separate collections between each other; add `:Decscribe COLLECTION`
-- [ ] remove `decscribe.py` completely | optimize libdecsync calls (too slow currently)
+- [x] remove `decscribe.py` completely | optimize libdecsync calls (too slow currently)
     - is it python?
     - is it ical parsing?
     - is it costly all-entries-recalculations?
     - everything is fast except (some part of decscribe.py) (maybe executing ALL entries too often?)
+- [ ] separate collections between each other; add `:Decscribe COLLECTION`
+- [ ] handle adding new items
+- [ ] handle editing many todo items simultaneously
+- [ ] handle removing
+- [ ] subtasks
+- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION`
+- [ ] `:Decscribe NAME-OF-PRECONFIGURED-DECSYNC-DIR COLLECTION`
 - [ ] edit and save todos (simple view of raw VDIR of given item)
-- [ ] `:Decscribe COLLECTION PATH-TO-DECSYNC-DIR`
-- [ ] `:Decscribe COLLECTION NAME-OF-PRECONFIGURED-DECSYNC-DIR`
-- [ ] edit many todos simultaneously, *in the list*
 - [ ] complex todo view, like Octo's PR view
-- [ ] categories
-- [ ] subtasks? is it even in iCal spec?
+- [ ] categories/tags
 - [ ] fix `repopulate_buffer` disabling highlighting for some reason
 - [ ] ...
 - [ ] at this point, todos collection view should be like just an MD file with nested lists
