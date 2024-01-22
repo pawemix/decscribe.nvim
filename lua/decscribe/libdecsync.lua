@@ -11,7 +11,10 @@ M.SyncType = {
 	-- ... TODO
 }
 
+---@alias Callback
+---| fun(path: string[], datetime: string, key: string?, value: string?)
 
+---@alias Connection ffi.cdata*
 
 ---TODO: capture actual well-typed return
 ---
@@ -81,6 +84,172 @@ function M.list_collections(decsync_dir, sync_type)
 	end
 
 	return collections
+end
+
+---@param decsync_dir string
+---@param sync_type SyncType
+---@param collection string
+---@param app_id string
+function M.connect(decsync_dir, sync_type, collection, app_id)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+	ffi.cdef([[
+		typedef void* Decsync;
+
+		static int decsync_so_new(
+			Decsync* decsync,
+			const char* decsync_dir,
+			const char* sync_type,
+			const char* collection,
+			const char* own_app_id
+		);
+
+		static void decsync_so_free(Decsync decsync);
+	]])
+
+	local decsync_arr = ffi.new("Decsync[1]")
+	ffi.gc(decsync_arr[0], function() lds.decsync_so_free(decsync_arr[0]) end)
+	local ds_so_new_ret =
+		lds.decsync_so_new(decsync_arr, decsync_dir, sync_type, collection, app_id)
+	assert(ds_so_new_ret == 0, "decsync_so_new failed")
+
+	return decsync_arr
+end
+
+---@param connection Connection
+---@param path string[]
+---@param callback Callback
+function M.add_listener(connection, path, callback)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+
+	ffi.cdef([[
+		static void decsync_so_add_listener(
+			Decsync decsync,
+			const char** subpath,
+			int len,
+			void (*on_entry_update)(
+				const char** path,
+				int len,
+				const char* datetime,
+				const char* key,
+				const char* value,
+				void* extra
+			)
+		);
+
+		typedef void (*callback_t)(
+			const char**,
+			int,
+			const char*,
+			const char*,
+			const char*,
+			void*
+		);
+	]])
+
+	local path_arr = ffi.new("const char*[?]", #path)
+	for i = 1, #path do
+		path_arr[i - 1] = path[i]
+	end
+
+	lds.decsync_so_add_listener(
+		connection[0],
+		path_arr,
+		#path,
+		function(path_, len, datetime, key, value)
+			local path_table = {}
+			for i = 1, len do
+				path_table[i] = path_[i - 1]
+			end
+			callback(
+				path_table,
+				ffi.string(datetime),
+				ffi.string(key),
+				ffi.string(value)
+			)
+		end
+	)
+end
+
+---@param connection Connection
+function M.init_stored_entries(connection)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+
+	ffi.cdef([[
+		static void decsync_so_init_stored_entries(Decsync decsync);
+	]])
+
+	lds.decsync_so_init_stored_entries(connection[0])
+end
+
+---@param connection Connection
+---@param path_exact string[]
+function M.execute_all_stored_entries_for_path_exact(connection, path_exact)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+
+	ffi.cdef([[
+		static void decsync_so_execute_all_stored_entries_for_path_exact(
+			Decsync decsync,
+			const char** path,
+			int len_path,
+			void* extra
+		);
+	]])
+
+	local path_exact_arr = ffi.new("const char*[?]", #path_exact)
+	for i = 1, #path_exact do
+		path_exact_arr[i - 1] = path_exact[i]
+	end
+
+	lds.decsync_so_execute_all_stored_entries_for_path_exact(
+		connection[0],
+		path_exact_arr,
+		#path_exact,
+		nil
+	)
+end
+
+---@param connection Connection
+---@param path_prefix string[]
+function M.execute_all_stored_entries_for_path_prefix(connection, path_prefix)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+
+	ffi.cdef([[
+		static void decsync_so_execute_all_stored_entries_for_path_prefix(
+			Decsync decsync,
+			const char** path,
+			int len_path,
+			void* extra
+		);
+	]])
+
+	local path_prefix_arr = ffi.new("const char*[?]", #path_prefix)
+	for i = 1, #path_prefix do
+		path_prefix_arr[i - 1] = path_prefix[i]
+	end
+
+	lds.decsync_so_execute_all_stored_entries_for_path_prefix(
+		connection[0],
+		path_prefix_arr,
+		#path_prefix,
+		nil
+	)
+end
+
+---@param connection Connection
+function M.init_done(connection)
+	ffi = ffi or require("ffi")
+	lds = lds or ffi.load("libdecsync")
+
+	ffi.cdef([[
+		static void decsync_so_init_done(Decsync decsync);
+	]])
+
+	lds.decsync_so_init_done(connection[0])
 end
 
 -- TODO: refactor sync_type and collection params into category = ("rss" |
