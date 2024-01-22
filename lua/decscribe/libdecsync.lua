@@ -261,39 +261,15 @@ end
 --
 ---@alias Category ("rss" | Collection)
 
-
----@param decsync_dir string
----@param sync_type SyncType
----@param collection string SHOULD be supplied for `sync_type`s supporting collections, i.e EVERYTHING EXCEPT `"rss"`
----@param app_id string asdf
+---@param connection Connection
 ---@param path string[]
 ---@param key string?
 ---@param value string?
-function M.set_entry(
-	decsync_dir,
-	sync_type,
-	collection,
-	app_id,
-	path,
-	key,
-	value
-)
+function M.set_entry(connection, path, key, value)
 	ffi = ffi or require("ffi")
 	lds = lds or ffi.load("libdecsync")
 
 	ffi.cdef([[
-		typedef void* Decsync;
-
-		static int decsync_so_new(
-			Decsync* decsync,
-			const char* decsync_dir,
-			const char* sync_type,
-			const char* collection,
-			const char* own_app_id
-		);
-
-		static void decsync_so_free(Decsync decsync);
-
 		static void decsync_so_set_entry(
 			Decsync decsync,
 			const char** path,
@@ -317,19 +293,13 @@ function M.set_entry(
 		path_arr[i - 1] = path[i]
 	end
 
-	local decsync_arr = ffi.new("Decsync[1]")
-	local ds_so_new_ret =
-		lds.decsync_so_new(decsync_arr, decsync_dir, sync_type, collection, app_id)
-	assert(ds_so_new_ret == 0, "decsync_so_new failed")
-	lds.decsync_so_set_entry(decsync_arr[0], path_arr, #path, key or "", value)
-	lds.decsync_so_free(decsync_arr[0])
+	lds.decsync_so_set_entry(connection[0], path_arr, #path, key or "", value)
 end
 
----@param decsync_dir string
----@param app_id string
+---@param connection Connection
 ---@param todo Todo
 ---@return any optional_error
-function M.update_todo(decsync_dir, app_id, todo)
+function M.update_todo(connection, todo)
 	local uid = todo.uid
 	local ical = todo.ical
 	local path = { "resources", uid }
@@ -348,7 +318,7 @@ function M.update_todo(decsync_dir, app_id, todo)
 
 	local ical_json = vim.fn.json_encode(ical)
 
-	M.set_entry(decsync_dir, "tasks", todo.collection, app_id, path, nil, ical_json)
+	M.set_entry(connection, path, nil, ical_json)
 end
 
 return M

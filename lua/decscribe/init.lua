@@ -172,10 +172,7 @@ function M.setup()
 
 				if not has_changed then goto continue end
 
-				local app_id = lds.get_app_id(APP_NAME)
-
-				local update_todo_err =
-					lds.update_todo(DECSYNC_DIR, app_id, changed_todo)
+				local update_todo_err = lds.update_todo(conn, changed_todo)
 				if update_todo_err then
 					error("There was a problem updating the todos!")
 				else
