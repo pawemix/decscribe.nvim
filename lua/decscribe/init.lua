@@ -54,12 +54,13 @@ local function repopulate_buffer()
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
 		local todo_uid = path[1]
-		if value == nil then
+		if value == "null" then
 			-- nil value means entry was deleted
 			todos[todo_uid] = nil
 			return
 		end
-		local todo_ical = value
+		local todo_ical = vim.fn.json_decode(value)
+		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
 		todos[todo_uid] = {
 			uid = todo_uid,
 			collection = fst_coll,
