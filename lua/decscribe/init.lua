@@ -100,6 +100,8 @@ local function repopulate_buffer()
 		if todo.summary then
 			line = "- [" .. (todo.completed and "x" or " ") .. "]"
 			line = line .. " " .. todo.summary
+			-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
+			line = line:gsub("\r?\n", " ")
 		end
 		if line then table.insert(lines, line) end
 	end
