@@ -16,6 +16,7 @@ local ICAL_PROP_NAMES = {
 	"X-APPLE-SORT-ORDER",
 	"COMPLETED",
 	"PERCENT-COMPLETE",
+	"END",
 }
 
 ---Returns nothing (`nil`) if there were no matches.
