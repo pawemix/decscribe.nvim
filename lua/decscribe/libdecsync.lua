@@ -160,7 +160,7 @@ function M.add_listener(connection, path, callback)
 		function(path_, len, datetime, key, value)
 			local path_table = {}
 			for i = 1, len do
-				path_table[i] = path_[i - 1]
+				path_table[i] = ffi.string(path_[i - 1])
 			end
 			callback(
 				path_table,
