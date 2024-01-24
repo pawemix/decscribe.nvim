@@ -8,6 +8,8 @@ local M = {}
 
 ---@alias Ical string
 
+---@alias Uid string
+
 ---@class Todo
 ---@field uid string
 ---@field collection string
@@ -35,8 +37,10 @@ local DECSYNC_DIR = vim.env.HOME .. "/some-ds-dir"
 local conn = nil
 ---@type integer?
 local main_buf_nr = nil
----@type Todo[]
+---@type table<Uid, Todo>
 local todos = {}
+---@type table<number, Uid>
+local idx_to_uids = {}
 ---@type string[]
 local lines = {}
 
@@ -78,25 +82,20 @@ local function repopulate_buffer()
 	lds.execute_all_stored_entries_for_path_exact(conn, { "info" })
 	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
 
-	-- obtain initial data using `decscribe` utility
-	local tempfile = vim.fn.tempname()
-	vim.fn.systemlist({ PLUGIN_ROOT .. "/decscribe", tempfile })
-	local todos_json = vim.fn.readfile(tempfile)
-	os.remove(tempfile)
+	idx_to_uids = {}
+	for uid, _ in pairs(todos) do
+		table.insert(idx_to_uids, uid)
+	end
 
-	---@diagnostic disable-next-line: cast-local-type
-	todos = vim.fn.json_decode(todos_json)
-	assert(
-		type(todos) == "table",
-		"Decscribe: unexpected output from the decscribe utility"
-	)
-	table.sort(
-		todos,
-		function(a, b) return (a.completed and 1 or 0) < (b.completed and 1 or 0) end
-	)
+	table.sort(idx_to_uids, function(uid1, uid2)
+		local completed1 = todos[uid1].completed
+		local completed2 = todos[uid2].completed
+		return (completed1 and 1 or 0) < (completed2 and 1 or 0)
+	end)
 
 	lines = {}
-	for _, todo in ipairs(todos) do
+	for _, uid in ipairs(idx_to_uids) do
+		local todo = todos[uid]
 		local line = ""
 		if todo.summary then
 			line = "- [" .. (todo.completed and "x" or " ") .. "]"
@@ -150,7 +149,7 @@ function M.setup()
 
 				local old_line = old_contents[old_start]
 				local new_line = new_contents[new_start]
-				local changed_todo = todos[old_start]
+				local changed_todo = todos[idx_to_uids[old_start]]
 				local has_changed = false
 
 				if -- todo status got swapped
