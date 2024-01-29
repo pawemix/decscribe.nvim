@@ -108,7 +108,10 @@ function M.connect(decsync_dir, sync_type, collection, app_id)
 	]])
 
 	local decsync_arr = ffi.new("Decsync[1]")
-	ffi.gc(decsync_arr[0], function() lds.decsync_so_free(decsync_arr[0]) end)
+	-- FIXME: Apparently, this gc runs prematurely, and thus crashes the app very
+	-- often due to a segfault, because a set_entry is called on an already-freed
+	-- connection:
+	--ffi.gc(decsync_arr[0], function() lds.decsync_so_free(decsync_arr[0]) end)
 	local ds_so_new_ret =
 		lds.decsync_so_new(decsync_arr, decsync_dir, sync_type, collection, app_id)
 	assert(ds_so_new_ret == 0, "decsync_so_new failed")
