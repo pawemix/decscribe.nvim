@@ -180,10 +180,10 @@ function M.setup()
 				else
 					-- updating succeeded
 					vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
-					repopulate_buffer()
 				end
 				::continue::
 			end
+			repopulate_buffer()
 		end,
 	})
 
