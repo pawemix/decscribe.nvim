@@ -17,8 +17,11 @@
     - is it ical parsing?
     - is it costly all-entries-recalculations?
     - everything is fast except (some part of decscribe.py) (maybe executing ALL entries too often?)
-- [ ] separate collections between each other; add `:Decscribe COLLECTION`
+- [ ] what's causing this long lag during first one/several `:w`'s?
+- [ ] don't reestablish libdecsync connection so often (i.e. with every repopulate_buffer) - keep it long living
 - [ ] handle adding new items
+- [ ] separate collections between each other; add `:Decscribe COLLECTION`
+- [ ] with already established libdecsync connection, only refresh *changed* entries, not all
 - [ ] handle editing many todo items simultaneously
 - [ ] handle removing
 - [ ] subtasks
