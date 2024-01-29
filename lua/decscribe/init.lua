@@ -88,9 +88,17 @@ local function repopulate_buffer()
 	end
 
 	table.sort(idx_to_uids, function(uid1, uid2)
-		local completed1 = todos[uid1].completed
-		local completed2 = todos[uid2].completed
-		return (completed1 and 1 or 0) < (completed2 and 1 or 0)
+		local completed1 = todos[uid1].completed and 1 or 0
+		local completed2 = todos[uid2].completed and 1 or 0
+		if completed1 ~= completed2 then return completed1 < completed2 end
+
+		local priority1 = tonumber(todos[uid1].priority) or 0
+		local priority2 = tonumber(todos[uid2].priority) or 0
+		if priority1 ~= priority2 then return priority1 < priority2 end
+
+		local summary1 = todos[uid1].summary
+		local summary2 = todos[uid2].summary
+		return summary1 < summary2
 	end)
 
 	lines = {}
