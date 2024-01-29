@@ -191,7 +191,6 @@ function M.setup()
 				end
 				::continue::
 			end
-			repopulate_buffer()
 		end,
 	})
 
