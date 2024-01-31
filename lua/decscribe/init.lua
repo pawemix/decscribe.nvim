@@ -119,6 +119,31 @@ local function repopulate_buffer()
 	vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 end
 
+local function on_line_changed(idx, old_line, new_line)
+	local changed_todo = todos[idx_to_uids[idx]]
+	local has_changed = false
+
+	if -- todo status got swapped
+		false
+		or (old_line:match("[-*] [[] []]") and new_line:match("[-*] [[]x[]]"))
+		or (old_line:match("[-*] [[]x[]]") and new_line:match("[-*] [[] []]"))
+	then
+		changed_todo.completed = not changed_todo.completed
+		has_changed = true
+	end
+
+	-- TODO: summary changed
+	local old_line_summary = old_line:gsub("[-*] +[[][ x][]] +", "", 1)
+	local new_line_summary = new_line:gsub("[-*] +[[][ x][]] +", "", 1)
+
+	if old_line_summary ~= new_line_summary then
+		changed_todo.summary = new_line_summary
+		has_changed = true
+	end
+
+	if has_changed then lds.update_todo(conn, changed_todo) end
+end
+
 function M.setup()
 	-- set up autocmds for reading/writing the buffer:
 	local augroup = vim.api.nvim_create_augroup("Decscribe", { clear = true })
