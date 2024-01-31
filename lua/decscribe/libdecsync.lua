@@ -301,7 +301,6 @@ end
 
 ---@param connection Connection
 ---@param todo Todo
----@return any optional_error
 function M.update_todo(connection, todo)
 	local uid = todo.uid
 	local ical = todo.ical

@@ -182,13 +182,9 @@ function M.setup()
 
 				if not has_changed then goto continue end
 
-				local update_todo_err = lds.update_todo(conn, changed_todo)
-				if update_todo_err then
-					error("There was a problem updating the todos!")
-				else
-					-- updating succeeded
-					vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
-				end
+				lds.update_todo(conn, changed_todo)
+				-- updating succeeded
+				vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 				::continue::
 			end
 		end,
