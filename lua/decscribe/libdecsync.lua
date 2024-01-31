@@ -11,6 +11,8 @@ M.SyncType = {
 	-- ... TODO
 }
 
+---@class (exact) libdecsync.json_string_t
+
 ---@alias Callback
 ---| fun(path: string[], datetime: string, key: string?, value: string?)
 
@@ -266,8 +268,8 @@ end
 
 ---@param connection Connection
 ---@param path string[]
----@param key string?
----@param value string?
+---@param key libdecsync.json_string_t?
+---@param value libdecsync.json_string_t?
 function M.set_entry(connection, path, key, value)
 	ffi = ffi or require("ffi")
 	lds = lds or ffi.load("libdecsync")
@@ -282,12 +284,16 @@ function M.set_entry(connection, path, key, value)
 		);
 	]])
 
+	---@diagnostic disable-next-line: cast-local-type
 	key = key or "null"
+	---@diagnostic disable-next-line: cast-local-type
 	value = value or "null"
 	-- NOTE: `key` and `value` HAVE TO be JSON-serialized strings (or JSON null)!
 	-- NOTE: if `value` is `null`, then the entry is deleted
+	---@diagnostic disable-next-line: param-type-mismatch
 	assert(key == "null" or vim.startswith(key, '"') and vim.endswith(key, '"'))
 	assert(
+		---@diagnostic disable-next-line: param-type-mismatch
 		value == "null" or vim.startswith(value, '"') and vim.endswith(value, '"')
 	)
 
@@ -320,6 +326,7 @@ function M.update_todo(connection, todo)
 
 	local ical_json = vim.fn.json_encode(ical)
 
+	---@diagnostic disable-next-line: param-type-mismatch
 	M.set_entry(connection, path, nil, ical_json)
 end
 
