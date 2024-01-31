@@ -18,10 +18,11 @@
     - is it costly all-entries-recalculations?
     - everything is fast except (some part of decscribe.py) (maybe executing ALL entries too often?)
 - [x] what's causing this long lag during first one/several `:w`'s? (buffer changes during BufWriteCmd)
+- [x] handle editing many todo items simultaneously
 - [ ] handle adding new items
 - [ ] separate collections between each other; add `:Decscribe COLLECTION`
-- [ ] handle editing many todo items simultaneously
 - [ ] handle removing
+- [ ] when existing items are moved, retain their UIDs instead of deleting and creating
 - [ ] use extmarks for diff-handling
 - [ ] subtasks
 - [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION`
