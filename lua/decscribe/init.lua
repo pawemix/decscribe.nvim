@@ -172,43 +172,23 @@ function M.setup()
 			for _, hunk in ipairs(hunks) do
 				local old_start, old_count, new_start, new_count = unpack(hunk)
 
-				-- TODO: explore extmarks - maybe a powerful feature to track changes?
-
-				-- TODO: handle other, more complex hunks than just one line change
-				assert(
-					old_count == 1 and new_count == 1,
-					"decscribe: cannot handle hunks bigger than one line yet"
-				)
-				-- TODO: what if line changed?
-				assert(old_start == new_start, "decscribe: cannot handle moving lines")
-
-				local old_line = old_contents[old_start]
-				local new_line = new_contents[new_start]
-				local changed_todo = todos[idx_to_uids[old_start]]
-				local has_changed = false
-
-				if -- todo status got swapped
-					false
-					or (old_line:match("[-*] [[] []]") and new_line:match("[-*] [[]x[]]"))
-					or (old_line:match("[-*] [[]x[]]") and new_line:match("[-*] [[] []]"))
-				then
-					changed_todo.completed = not changed_todo.completed
-					has_changed = true
+				if old_count == 0 and new_count == 0 then
+					error('It is not possible that "absence of lines" moved.')
 				end
 
-				-- TODO: summary changed
-				local old_line_summary = old_line:gsub("[-*] +[[][ x][]] +", "", 1)
-				local new_line_summary = new_line:gsub("[-*] +[[][ x][]] +", "", 1)
-
-				if old_line_summary ~= new_line_summary then
-					changed_todo.summary = new_line_summary
-					has_changed = true
+				if old_count == new_count and old_start == new_start then
+					local start = old_start -- since they're both the same anyway
+					local count = old_count -- since they're both the same anyway
+					assert(count > 0, "decscribe: diff count in this hunk cannot be 0")
+					for idx = start, start + count - 1 do
+						local old_line = old_contents[idx]
+						local new_line = new_contents[idx]
+						on_line_changed(idx, old_line, new_line)
+					end
+				-- different scenario
+				else
+					error("decscribe: some changes could not get handled")
 				end
-
-				if not has_changed then goto continue end
-
-				lds.update_todo(conn, changed_todo)
-				::continue::
 			end
 			-- updating succeeded
 			lines = new_contents
