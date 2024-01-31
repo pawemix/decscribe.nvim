@@ -183,10 +183,10 @@ function M.setup()
 				if not has_changed then goto continue end
 
 				lds.update_todo(conn, changed_todo)
-				-- updating succeeded
-				vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 				::continue::
 			end
+			-- updating succeeded
+			vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 		end,
 	})
 
