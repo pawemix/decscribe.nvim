@@ -121,6 +121,47 @@ local function repopulate_buffer()
 	vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 end
 
+--- XXX: Indices in `todos` will change - any data referring to those indices
+--- may break unless properly handled.
+local function on_line_removed(idx)
+	local uid = idx_to_uids[idx]
+	table.remove(idx_to_uids, idx)
+	todos[uid] = nil
+	lds.set_entry(conn, { "resources", uid }, nil, nil)
+end
+
+--- XXX: Indices in `todos` will change - any data referring to those indices
+--- may break unless properly handled.
+local function on_line_added(idx, line)
+	-- TODO: handle more invalid entries
+	local checked = line:match("[-*] +[[]x[]] +")
+	local uid = ic.generate_uid(vim.tbl_keys(todos))
+	---@type ical.vtodo_t
+	local vtodo = {
+		summary = line:gsub("^[-*] +[[][ x][]] +", "", 1),
+		completed = checked and true or false,
+		priority = ic.priority_t.undefined,
+		description = "",
+	}
+	local ical = ic.create_ical_vtodo(uid, vtodo)
+	---@type Todo
+	local todo = {
+		---@diagnostic disable-next-line: assign-type-mismatch
+		uid = uid,
+		collection = collection,
+		summary = vtodo.summary,
+		description = vtodo.description,
+		completed = vtodo.completed,
+		priority = tostring(vtodo.priority),
+		ical = ical,
+	}
+	todos[uid] = todo
+	table.insert(idx_to_uids, idx, uid)
+	local ical_json = vim.fn.json_encode(ical)
+	---@diagnostic disable-next-line: assign-type-mismatch, param-type-mismatch
+	lds.set_entry(conn, { "resources", uid }, nil, ical_json)
+end
+
 local function on_line_changed(idx, old_line, new_line)
 	local changed_todo = todos[idx_to_uids[idx]]
 	local has_changed = false
@@ -171,6 +212,7 @@ function M.setup()
 				{ result_type = "indices" }
 			)
 			assert(type(hunks) == "table", "Decscribe: unexpected diff output")
+			local lines_to_affect = {}
 			for _, hunk in ipairs(hunks) do
 				local old_start, old_count, new_start, new_count = unpack(hunk)
 
@@ -178,9 +220,42 @@ function M.setup()
 					error('It is not possible that "absence of lines" moved.')
 				end
 
-				if old_count == new_count and old_start == new_start then
-					local start = old_start -- since they're both the same anyway
-					local count = old_count -- since they're both the same anyway
+				local start
+				local count
+				-- something was added:
+				if old_count == 0 and new_count > 0 then
+					--
+					-- NOTE: vim.diff() provides, which index the hunk will move into,
+					-- based on *the previous hunks*. E.g. given a one-line deletion at
+					-- #100 and a two-line deletion at #200, the hunks will be:
+					--
+					-- { 100, 1, 99, 0 } and { 200, 2, >>197<<, 0 }
+					--
+					-- Therefore, the second hunk's destination index takes into account
+					-- the one line deleted in the first hunk.
+					--
+					-- NOTE: This is not yet utilized here, but may be useful when
+					-- complexity of this logic grows.
+					--
+					start = new_start
+					count = new_count
+					for idx = start, start + count - 1 do
+						table.insert(
+							lines_to_affect,
+							{ idx = idx, line = new_contents[idx] }
+						)
+					end
+				-- something was removed:
+				elseif old_count > 0 and new_count == 0 then
+					start = old_start
+					count = old_count
+					for idx = start, start + count - 1 do
+						table.insert(lines_to_affect, { idx = idx, line = nil })
+					end
+				-- something changed, size remained the same:
+				elseif old_count == new_count and old_start == new_start then
+					start = old_start -- since they're both the same anyway
+					count = old_count -- since they're both the same anyway
 					assert(count > 0, "decscribe: diff count in this hunk cannot be 0")
 					for idx = start, start + count - 1 do
 						local old_line = old_contents[idx]
@@ -192,6 +267,19 @@ function M.setup()
 					error("decscribe: some changes could not get handled")
 				end
 			end
+			-- sort pending changes in reversed order to not break indices when
+			-- removing/adding entries:
+			table.sort(lines_to_affect, function(a, b) return a.idx > b.idx end)
+			-- apply pending changes
+			for _, change in ipairs(lines_to_affect) do
+				local idx = change.idx
+				if change.line == nil then
+					on_line_removed(idx)
+				else
+					on_line_added(idx, change.line)
+				end
+			end
+
 			-- updating succeeded
 			lines = new_contents
 			vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
