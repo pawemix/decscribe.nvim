@@ -43,6 +43,8 @@ local todos = {}
 local idx_to_uids = {}
 ---@type string[]
 local lines = {}
+---@type string NOTE: ID of the collection (not its name)
+local collection = nil
 
 -- Functions
 ------------
@@ -52,8 +54,8 @@ local function repopulate_buffer()
 	assert(main_buf_nr ~= nil)
 
 	local colls = lds.list_collections(DECSYNC_DIR, "tasks")
-	local fst_coll = colls[1]
-	conn = lds.connect(DECSYNC_DIR, "tasks", fst_coll, lds.get_app_id(APP_NAME))
+	collection = colls[1]
+	conn = lds.connect(DECSYNC_DIR, "tasks", collection, lds.get_app_id(APP_NAME))
 
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
@@ -67,7 +69,7 @@ local function repopulate_buffer()
 		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
 		todos[todo_uid] = {
 			uid = todo_uid,
-			collection = fst_coll,
+			collection = collection,
 			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
 			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
