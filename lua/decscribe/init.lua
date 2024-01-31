@@ -211,6 +211,7 @@ function M.setup()
 				::continue::
 			end
 			-- updating succeeded
+			lines = new_contents
 			vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
 		end,
 	})
