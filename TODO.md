@@ -19,13 +19,16 @@
     - everything is fast except (some part of decscribe.py) (maybe executing ALL entries too often?)
 - [x] what's causing this long lag during first one/several `:w`'s? (buffer changes during BufWriteCmd)
 - [x] handle editing many todo items simultaneously
-- [ ] handle adding new items
-- [ ] separate collections between each other; add `:Decscribe COLLECTION`
-- [ ] handle removing
+- [x] handle adding new items
+- [x] handle removing
+- [ ] `:Decscribe PATH-TO-DECSYNC-DIR`
+- [ ] separate collections between each other; add `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-LABEL`
+- [ ] handle complex hunks (mix of changes and removals/additions)
 - [ ] when existing items are moved, retain their UIDs instead of deleting and creating
 - [ ] use extmarks for diff-handling
 - [ ] subtasks
-- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION`
+- [ ] categories/tags
+- [ ] start & due dates
 - [ ] `:Decscribe NAME-OF-PRECONFIGURED-DECSYNC-DIR COLLECTION`
 - [ ] edit and save todos (simple view of raw VDIR of given item)
 - [ ] fix `repopulate_buffer` disabling highlighting for some reason
@@ -33,8 +36,9 @@
 - [ ] memory leak - free `Decsync*` connections after the buffer is repopulated (a brand new connection is established)
 - [ ] with already established libdecsync connection, only refresh *changed* entries, not all
 - [ ] complex todo view, like Octo's PR view
-- [ ] categories/tags
 - [ ] ...
+- [ ] `:Decscribe` - provide autocompletion for existing collections
+- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-LABEL` - if collection not provided, create a new one with given label
 - [ ] at this point, todos collection view should be like just an MD file with nested lists
 - [ ] ...
 - [ ] similar for calendar?
