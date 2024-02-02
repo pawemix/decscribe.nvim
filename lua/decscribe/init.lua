@@ -43,19 +43,48 @@ local todos = {}
 local idx_to_uids = {}
 ---@type string[]
 local lines = {}
----@type string NOTE: ID of the collection (not its name)
-local collection = nil
+---@type string
+local curr_coll_id = nil
 
 -- Functions
 ------------
 
+---@alias coll_name_t string
+---@alias coll_id_t string
+---@alias colls_t table<coll_name_t, coll_id_t>
+
+---@return colls_t
+local function list_collections()
+	local app_id = lds.get_app_id(APP_NAME)
+
+	local coll_ids = lds.list_collections(DECSYNC_DIR, "tasks")
+	local coll_name_to_ids = {}
+
+	for _, coll_id in ipairs(coll_ids) do
+		local coll_conn
+		coll_conn = lds.connect(DECSYNC_DIR, "tasks", coll_id, app_id)
+		lds.add_listener(coll_conn, { "info" }, function(_, _, key, value)
+			key = key or "null"
+			key = vim.fn.json_decode(key)
+			value = value or "null"
+			value = vim.fn.json_decode(value)
+			if key == "name" and value then coll_name_to_ids[value] = coll_id end
+		end)
+		lds.init_done(coll_conn)
+		lds.init_stored_entries(coll_conn)
+		lds.execute_all_stored_entries_for_path_exact(coll_conn, { "info" })
+	end
+
+	return coll_name_to_ids
+end
+
 local function repopulate_buffer()
 	if main_buf_nr == nil then return end
 	assert(main_buf_nr ~= nil)
+	assert(curr_coll_id)
 
-	local colls = lds.list_collections(DECSYNC_DIR, "tasks")
-	collection = colls[1]
-	conn = lds.connect(DECSYNC_DIR, "tasks", collection, lds.get_app_id(APP_NAME))
+	conn =
+		lds.connect(DECSYNC_DIR, "tasks", curr_coll_id, lds.get_app_id(APP_NAME))
 
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
@@ -69,7 +98,7 @@ local function repopulate_buffer()
 		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
 		todos[todo_uid] = {
 			uid = todo_uid,
-			collection = collection,
+			collection = curr_coll_id,
 			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
 			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
@@ -81,7 +110,6 @@ local function repopulate_buffer()
 
 	-- read all current data
 	lds.init_stored_entries(conn)
-	lds.execute_all_stored_entries_for_path_exact(conn, { "info" })
 	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
 
 	idx_to_uids = {}
@@ -148,7 +176,7 @@ local function on_line_added(idx, line)
 	local todo = {
 		---@diagnostic disable-next-line: assign-type-mismatch
 		uid = uid,
-		collection = collection,
+		collection = curr_coll_id,
 		summary = vtodo.summary,
 		description = vtodo.description,
 		completed = vtodo.completed,
@@ -286,11 +314,24 @@ function M.setup()
 		end,
 	})
 
-	vim.api.nvim_create_user_command("Decscribe", function()
+	vim.api.nvim_create_user_command("Decscribe", function(params)
+		local coll_name = params.args
+		assert(coll_name, "Collection name has to be given")
+		local colls = list_collections()
+		if not colls[coll_name] then
+			error(
+				"Collection '"
+					.. coll_name
+					.. "' does not exist."
+					.. " Available collections: "
+					.. table.concat(vim.tbl_keys(colls), ", ")
+					.. "."
+			)
+		end
+		curr_coll_id = colls[coll_name]
+
 		-- FIXME: when rerunning the command and the buffer exists, don't create new
 		-- buffer
-
-		-- local decsync_dir_path = opts.args[1]
 
 		-- initialize and configure the buffer
 		if main_buf_nr == nil then
@@ -313,7 +354,9 @@ function M.setup()
 		end
 
 		repopulate_buffer()
-	end, {})
+	end, {
+		nargs = 1,
+	})
 end
 
 return M
