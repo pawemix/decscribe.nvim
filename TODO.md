@@ -21,24 +21,36 @@
 - [x] handle editing many todo items simultaneously
 - [x] handle adding new items
 - [x] handle removing
-- [ ] `:Decscribe PATH-TO-DECSYNC-DIR`
-- [ ] separate collections between each other; add `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-LABEL`
+- [x] `:DECSCRIBE COLLECTION-NAME`
+- [x] `:Decscribe` - provide autocompletion for existing collections
+- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME`
 - [ ] handle complex hunks (mix of changes and removals/additions)
-- [ ] when existing items are moved, retain their UIDs instead of deleting and creating
-- [ ] use extmarks for diff-handling
+- [ ] priority
 - [ ] subtasks
 - [ ] categories/tags
 - [ ] start & due dates
-- [ ] `:Decscribe NAME-OF-PRECONFIGURED-DECSYNC-DIR COLLECTION`
-- [ ] edit and save todos (simple view of raw VDIR of given item)
+- [ ] when existing items are moved, retain their UIDs instead of deleting and creating?
+- [ ] use extmarks for diff-handling?
+- [ ] preconfigured ds-dirs:
+    - `:Decscribe NAME-OF-PRECONFIGURED-DECSYNC-DIR COLLECTION`; and/or
+    - `:<range>Decscribe COLLECTION`; and/or
+    - `:<range>Decscribe`
 - [ ] fix `repopulate_buffer` disabling highlighting for some reason
 - [ ] don't reestablish libdecsync connection so often (i.e. with every repopulate_buffer) - keep it long living
 - [ ] memory leak - free `Decsync*` connections after the buffer is repopulated (a brand new connection is established)
 - [ ] with already established libdecsync connection, only refresh *changed* entries, not all
 - [ ] complex todo view, like Octo's PR view
-- [ ] ...
-- [ ] `:Decscribe` - provide autocompletion for existing collections
-- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-LABEL` - if collection not provided, create a new one with given label
+- [ ] multiple DS buffers can be open (different collections and/or DS dirs)
+- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME` - if collection not provided, create a new one with given name
+- [ ] `:Decscribe` - simple path autocompletion for 1st arg
+- [ ] `:Decscribe` - DS dir path autocompletion for *preconfigured* DS dirs
+- [ ] `:Decscribe` - DS dir path autocompletion for dynamically searched DS dirs
+    - seeking .decsync-info files or using `lds.check_decsync_info`
+    - up to `n` levels of directory recursion, not to overdo computation
+    - async? to not block UI thread
 - [ ] at this point, todos collection view should be like just an MD file with nested lists
+- [ ] delete todo line(s) from one coll/ds-dir, and paste it/them into another => whole ICals are ported between colls/ds-dirs
+    - i.e. all metadata like timestamps, uids etc. is preserved
+- [ ] edit and save todos (simple view of raw VDIR of given item)
 - [ ] ...
 - [ ] similar for calendar?
