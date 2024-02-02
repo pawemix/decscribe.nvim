@@ -6,6 +6,9 @@ local M = {}
 -- Type Definitions
 -------------------
 
+---@alias CompleteCustomListFunc
+---| fun(arg_lead: string, cmd_line: string, cursor_pos: integer): string[]
+
 ---@alias Ical string
 
 ---@alias Uid string
@@ -314,6 +317,8 @@ function M.setup()
 		end,
 	})
 
+	local coll_names_cached = nil
+
 	vim.api.nvim_create_user_command("Decscribe", function(params)
 		local coll_name = params.args
 		assert(coll_name, "Collection name has to be given")
@@ -356,6 +361,17 @@ function M.setup()
 		repopulate_buffer()
 	end, {
 		nargs = 1,
+		---@type CompleteCustomListFunc
+		complete = function(arg_lead)
+			coll_names_cached = coll_names_cached or vim.tbl_keys(list_collections())
+			local output = {}
+			for _, coll_name in ipairs(coll_names_cached) do
+				if vim.startswith(coll_name, arg_lead) then
+					table.insert(output, coll_name)
+				end
+			end
+			return output
+		end,
 	})
 end
 
