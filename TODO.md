@@ -23,7 +23,8 @@
 - [x] handle removing
 - [x] `:DECSCRIBE COLLECTION-NAME`
 - [x] `:Decscribe` - provide autocompletion for existing collections
-- [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME`
+- [x] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME`
+- [x] `:Decscribe` - simple path autocompletion for 1st arg
 - [ ] handle complex hunks (mix of changes and removals/additions)
 - [ ] priority
 - [ ] subtasks
@@ -42,7 +43,6 @@
 - [ ] complex todo view, like Octo's PR view
 - [ ] multiple DS buffers can be open (different collections and/or DS dirs)
 - [ ] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME` - if collection not provided, create a new one with given name
-- [ ] `:Decscribe` - simple path autocompletion for 1st arg
 - [ ] `:Decscribe` - DS dir path autocompletion for *preconfigured* DS dirs
 - [ ] `:Decscribe` - DS dir path autocompletion for dynamically searched DS dirs
     - seeking .decsync-info files or using `lds.check_decsync_info`
