@@ -28,8 +28,6 @@ local Todo = {}
 
 local APP_NAME = "decscribe"
 
-local PLUGIN_ROOT = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h")
-
 -- XXX: hardcoded decsync dir
 local DECSYNC_DIR = vim.env.HOME .. "/some-ds-dir"
 
