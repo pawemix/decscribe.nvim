@@ -28,9 +28,6 @@ local Todo = {}
 
 local APP_NAME = "decscribe"
 
--- XXX: hardcoded decsync dir
-local DECSYNC_DIR = vim.env.HOME .. "/some-ds-dir"
-
 -- Global State
 ---------------
 
@@ -46,6 +43,8 @@ local idx_to_uids = {}
 local lines = {}
 ---@type string
 local curr_coll_id = nil
+---@type string?
+local decsync_dir = nil
 
 -- Functions
 ------------
@@ -54,16 +53,24 @@ local curr_coll_id = nil
 ---@alias coll_id_t string
 ---@alias colls_t table<coll_name_t, coll_id_t>
 
+---checks the filesystem whether |path| is a decsync directory
+---@param path string
+---@return boolean
+local function is_decsync_dir(path)
+	return vim.fn.filereadable(vim.fn.expand(path .. "/.decsync-info")) == 1
+end
+
+---@param ds_dir string path to the decsync directory
 ---@return colls_t
-local function list_collections()
+local function list_collections(ds_dir)
 	local app_id = lds.get_app_id(APP_NAME)
 
-	local coll_ids = lds.list_collections(DECSYNC_DIR, "tasks")
+	local coll_ids = lds.list_collections(ds_dir, "tasks")
 	local coll_name_to_ids = {}
 
 	for _, coll_id in ipairs(coll_ids) do
 		local coll_conn
-		coll_conn = lds.connect(DECSYNC_DIR, "tasks", coll_id, app_id)
+		coll_conn = lds.connect(ds_dir, "tasks", coll_id, app_id)
 		lds.add_listener(coll_conn, { "info" }, function(_, _, key, value)
 			key = key or "null"
 			key = vim.fn.json_decode(key)
@@ -83,9 +90,10 @@ local function repopulate_buffer()
 	if main_buf_nr == nil then return end
 	assert(main_buf_nr ~= nil)
 	assert(curr_coll_id)
+	assert(decsync_dir)
 
 	conn =
-		lds.connect(DECSYNC_DIR, "tasks", curr_coll_id, lds.get_app_id(APP_NAME))
+		lds.connect(decsync_dir, "tasks", curr_coll_id, lds.get_app_id(APP_NAME))
 
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
@@ -315,12 +323,25 @@ function M.setup()
 		end,
 	})
 
-	local coll_names_cached = nil
-
 	vim.api.nvim_create_user_command("Decscribe", function(params)
-		local coll_name = params.args
-		assert(coll_name, "Collection name has to be given")
-		local colls = list_collections()
+		decsync_dir = params.fargs[1]
+		if not decsync_dir then
+			vim.notify_once(
+				"Decsync directory (arg #1) has to be given",
+				vim.log.levels.ERROR
+			)
+			return
+		end
+
+		local coll_name = params.fargs[2]
+		if not coll_name then
+			vim.notify_once(
+				"Collection name (arg #2) has to be given",
+				vim.log.levels.ERROR
+			)
+			return
+		end
+		local colls = list_collections(decsync_dir)
 		if not colls[coll_name] then
 			error(
 				"Collection '"
@@ -330,6 +351,19 @@ function M.setup()
 					.. table.concat(vim.tbl_keys(colls), ", ")
 					.. "."
 			)
+			vim.notify(
+				("Available collections: %s."):format(
+					table.concat(
+						vim.tbl_map(
+							function(s) return "'" .. s .. "'" end,
+							vim.tbl_keys(colls)
+						),
+						", "
+					)
+				),
+				vim.log.levels.INFO
+			)
+			return
 		end
 		curr_coll_id = colls[coll_name]
 
@@ -340,7 +374,7 @@ function M.setup()
 		if main_buf_nr == nil then
 			main_buf_nr = vim.api.nvim_create_buf(true, false)
 
-			vim.api.nvim_buf_set_name(main_buf_nr, "decscribe://" .. DECSYNC_DIR)
+			vim.api.nvim_buf_set_name(main_buf_nr, "decscribe://" .. decsync_dir)
 			vim.api.nvim_buf_set_option(main_buf_nr, "filetype", "decscribe")
 			vim.api.nvim_buf_set_option(main_buf_nr, "buftype", "acwrite")
 			-- vim.api.nvim_buf_set_option(bufnr, "number", false)
@@ -358,17 +392,23 @@ function M.setup()
 
 		repopulate_buffer()
 	end, {
-		nargs = 1,
+		nargs = "+",
 		---@type CompleteCustomListFunc
-		complete = function(arg_lead)
-			coll_names_cached = coll_names_cached or vim.tbl_keys(list_collections())
-			local output = {}
-			for _, coll_name in ipairs(coll_names_cached) do
-				if vim.startswith(coll_name, arg_lead) then
-					table.insert(output, coll_name)
-				end
+		complete = function(arg_lead, cmd_line)
+			local cmd_line_comps = vim.split(cmd_line, "%s+")
+			-- if this is the 1st argument (besides the cmd), provide path completion:
+			if arg_lead == cmd_line_comps[2] then
+				return vim.fn.getcompletion(arg_lead, "file", true)
 			end
-			return output
+			-- otherwise, this is the second argument:
+			local ds_dir = cmd_line_comps[2]
+			if not is_decsync_dir(ds_dir) then return {} end
+
+			local coll_names = vim.tbl_keys(list_collections(ds_dir))
+			return vim.tbl_filter(
+				function(s) return vim.startswith(s, arg_lead) end,
+				coll_names
+			)
 		end,
 	})
 end
