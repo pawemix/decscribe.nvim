@@ -332,6 +332,8 @@ function M.setup()
 			)
 			return
 		end
+		-- expand potential path shortcuts like '~':
+		decsync_dir = vim.fn.expand(decsync_dir)
 
 		local coll_name = params.fargs[2]
 		if not coll_name then
@@ -389,7 +391,7 @@ function M.setup()
 				return vim.fn.getcompletion(arg_lead, "file", true)
 			end
 			-- otherwise, this is the second argument:
-			local ds_dir = cmd_line_comps[2]
+			local ds_dir = vim.fn.expand(cmd_line_comps[2])
 			if not is_decsync_dir(ds_dir) then return {} end
 
 			local coll_names = vim.tbl_keys(list_collections(ds_dir))
