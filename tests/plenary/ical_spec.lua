@@ -82,3 +82,28 @@ describe("upsert_ical_prop", function()
 		eq(after, ic.upsert_ical_prop(before, "DESCRIPTION", "this is new"))
 	end)
 end)
+
+describe("parse_md_line", function()
+	it("rejects a non-checklist line", function()
+		local line = "- something"
+		eq(nil, ic.parse_md_line(line))
+	end)
+
+	it("parses a simple line", function()
+		local line = "- [ ] something"
+		local actual = ic.parse_md_line(line) or {}
+		eq("something", actual.summary)
+		eq(false, actual.completed)
+	end)
+
+	it("recognizes one category", function()
+		local line = "- [ ] :edu: write thesis"
+		---@type ical.vtodo_t
+		local actual = ic.parse_md_line(line) or {}
+
+		eq("write thesis", actual.summary)
+		eq({ "edu" }, actual.categories)
+		eq(false, actual.completed)
+	end)
+
+end)
