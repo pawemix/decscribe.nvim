@@ -9,6 +9,7 @@ local M = {}
 ---@field description string?
 ---@field completed boolean
 ---@field priority number?
+---@field categories string[]?
 local vtodo_t = {}
 
 local ICAL_PROP_NAMES = {
@@ -24,6 +25,7 @@ local ICAL_PROP_NAMES = {
 	"DESCRIPTION",
 	"PRIORITY",
 	"STATUS",
+	"CATEGORIES",
 	"X-APPLE-SORT-ORDER",
 	"COMPLETED",
 	"PERCENT-COMPLETE",
@@ -82,6 +84,9 @@ function M.create_ical_vtodo(uid, vtodo)
 	-- 75 chars maximum)
 	local summary = vtodo.summary:gsub("[\r\n;]", ". ") or ""
 
+	-- TODO: enforce no colons nor CRLFs in category names
+	local categories = table.concat(vtodo.categories or {}, ",")
+
 	return table.concat({
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
@@ -96,7 +101,7 @@ function M.create_ical_vtodo(uid, vtodo)
 		"DESCRIPTION:" .. description,
 		"PRIORITY:" .. priority,
 		"STATUS:" .. (vtodo.completed and "COMPLETED" or "NEEDS-ACTION"),
-		-- "CATEGORIES:", -- TODO
+		"CATEGORIES:" .. categories,
 		-- "X-APPLE-SORT-ORDER:123456789",
 		-- RELATED-TO;RELTYPE=PARENT:<uid>
 		"COMPLETED:" .. created_stamp,
@@ -193,4 +198,36 @@ function M.upsert_ical_prop(ical, prop_name, prop_value)
 		return insert_ical_prop(ical, prop_name, prop_value)
 	end
 end
+
+---@return ical.vtodo_t?
+function M.parse_md_line(line)
+	local checkbox_heading = line:match("^[-*]%s+[[][ x][]]%s+")
+	-- there should always be a checkbox:
+	if not checkbox_heading then return nil end
+	-- TODO: handle more invalid entries
+
+	local completed = checkbox_heading:match("x") ~= nil
+
+	local rest = line:sub(#checkbox_heading + 1)
+
+	local categories = {}
+	while true do
+		local cat_start, cat_end, cat = rest:find("^:([-_%a]+):%s*")
+		if not cat_start then break end
+		table.insert(categories, cat)
+		rest = rest:sub(cat_end + 1)
+	end
+
+	---@type ical.vtodo_t
+	local vtodo = {
+		summary = rest,
+		completed = completed,
+		priority = M.priority_t.undefined,
+		categories = categories,
+		description = nil,
+	}
+
+	return vtodo
+end
+
 return M
