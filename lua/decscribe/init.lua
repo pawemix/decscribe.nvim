@@ -343,26 +343,14 @@ function M.setup()
 		end
 		local colls = list_collections(decsync_dir)
 		if not colls[coll_name] then
-			error(
-				"Collection '"
-					.. coll_name
-					.. "' does not exist."
-					.. " Available collections: "
-					.. table.concat(vim.tbl_keys(colls), ", ")
-					.. "."
-			)
-			vim.notify(
-				("Available collections: %s."):format(
-					table.concat(
-						vim.tbl_map(
-							function(s) return "'" .. s .. "'" end,
-							vim.tbl_keys(colls)
-						),
-						", "
-					)
-				),
-				vim.log.levels.INFO
-			)
+			local msg = ("Collection '%s' does not exist."):format(coll_name)
+			local coll_names = vim.tbl_keys(colls)
+			if #coll_names > 0 then
+				local function enquote(s) return "'" .. s .. "'" end
+				msg = msg .. "\nAvailable collections: "
+				msg = msg .. table.concat(vim.tbl_map(enquote, coll_names), ", ")
+			end
+			vim.notify(msg, vim.log.levels.ERROR)
 			return
 		end
 		curr_coll_id = colls[coll_name]
