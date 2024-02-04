@@ -25,11 +25,12 @@
 - [x] `:Decscribe` - provide autocompletion for existing collections
 - [x] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME`
 - [x] `:Decscribe` - simple path autocompletion for 1st arg
-- [ ] handle complex hunks (mix of changes and removals/additions)
+- [x] categories/tags
+- [ ] Tasks.org compliance?: sort categories alphabetically
 - [ ] priority
-- [ ] subtasks
-- [ ] categories/tags
 - [ ] start & due dates
+- [ ] subtasks
+- [ ] handle complex hunks (mix of changes and removals/additions)
 - [ ] when existing items are moved, retain their UIDs instead of deleting and creating?
 - [ ] use extmarks for diff-handling?
 - [ ] preconfigured ds-dirs:
