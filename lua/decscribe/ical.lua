@@ -133,7 +133,7 @@ function M.find_ical_prop(ical, prop_name)
 	local prop_value_end_idx = next_prop_name_idx - 1
 	local prop_value = ical:sub(prop_value_start_idx, prop_value_end_idx)
 
-	return prop_value, prop_name_idx, prop_value_start_idx, prop_value_end_idx
+	return prop_value, prop_name_idx + 2, prop_value_start_idx, prop_value_end_idx
 end
 
 return M
