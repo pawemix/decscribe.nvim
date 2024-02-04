@@ -12,9 +12,10 @@ local M = {}
 local vtodo_t = {}
 
 local ICAL_PROP_NAMES = {
+	-- TODO: insert BEGIN:VCALENDAR
 	"VERSION",
 	"PRODID",
-	"BEGIN",
+	"BEGIN", -- TODO: replace with BEGIN:VTODO
 	"DTSTAMP",
 	"UID",
 	"CREATED",
@@ -26,7 +27,8 @@ local ICAL_PROP_NAMES = {
 	"X-APPLE-SORT-ORDER",
 	"COMPLETED",
 	"PERCENT-COMPLETE",
-	"END",
+	"END", -- TODO: replace END:VTODO
+	-- TODO: insert END:VCALENDAR
 }
 
 ---@enum ical.priority_t
