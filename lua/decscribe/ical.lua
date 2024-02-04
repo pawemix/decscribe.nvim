@@ -138,4 +138,59 @@ function M.find_ical_prop(ical, prop_name)
 	return prop_value, prop_name_idx + 2, prop_value_start_idx, prop_value_end_idx
 end
 
+---@return ical.ical_t
+local function insert_ical_prop(ical, prop_name, prop_value)
+	-- find propname closest to the target propname in the ICAL_PROP_NAMES order,
+	-- but still before it:
+	local before_prop_order_idx = 1
+	for i, pn in ipairs(ICAL_PROP_NAMES) do
+		if prop_name == pn then break end
+		if ical:find(pn, 1, true) then before_prop_order_idx = i end
+	end
+	local ical_lines = vim.split(ical, "\r\n")
+	-- put the new prop *after* the line where "before prop" resides:
+	local before_prop = ICAL_PROP_NAMES[before_prop_order_idx]
+	local before_prop_idx = nil
+	for idx, line in ipairs(ical_lines) do
+		if vim.startswith(line, before_prop) then
+			before_prop_idx = idx
+			break
+		end
+	end
+	assert(before_prop_idx)
+	--
+	table.insert(ical_lines, before_prop_idx + 1, prop_name .. ":" .. prop_value)
+	-- NOTE: no "\r\n" at the end is needed due to an empty line in input end
+	return table.concat(ical_lines, "\r\n")
+end
+
+---@return ical.ical_t
+local function update_ical_prop(ical, prop_name, prop_value)
+	local ical_lines = vim.split(ical, "\r\n")
+	for idx, line in ipairs(ical_lines) do
+		if vim.startswith(line, prop_name) then
+			ical_lines[idx] = prop_name .. ":" .. prop_value
+			break
+		end
+		-- TODO: remove dangling lines of prop value if it was multiline
+	end
+	-- NOTE: no "\r\n" at the end is needed due to an empty line in input end
+	return table.concat(ical_lines, "\r\n")
+end
+
+---@return ical.ical_t new_ical
+function M.upsert_ical_prop(ical, prop_name, prop_value)
+	local ical_lines = vim.split(ical, "\r\n")
+	if
+		#vim.tbl_filter(
+			function(line) return vim.startswith(line, prop_name) end,
+			ical_lines
+		) > 0
+	then
+		return update_ical_prop(ical, prop_name, prop_value)
+	end
+	if true then
+		return insert_ical_prop(ical, prop_name, prop_value)
+	end
+end
 return M
