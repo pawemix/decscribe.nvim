@@ -4,6 +4,10 @@ local ic = require("decscribe.ical")
 
 local eq = assert.are_same
 
+local function ical_str_from(lines)
+	return table.concat(lines, "\r\n") .. "\r\n"
+end
+
 describe("find_ical_prop", function()
 	local one_prop_data = table.concat({
 		"BEGIN:CALENDAR", -- 14 chars + 2 ("\r\n") = 16
@@ -36,5 +40,45 @@ describe("find_ical_prop", function()
 		}, "\r\n") .. "\r\n"
 
 		eq("here", ic.find_ical_prop(data, "SUMMARY"))
+	end)
+end)
+
+describe("upsert_ical_prop", function()
+	it("updates description", function()
+		local before = table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"DESCRIPTION:something",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n"
+		local after = table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"DESCRIPTION:this has changed",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n"
+
+		eq(after, ic.upsert_ical_prop(before, "DESCRIPTION", "this has changed"))
+	end)
+
+	it("inserts description after summary", function ()
+		local before = ical_str_from({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"SUMMARY:this does not change",
+			"END:VTODO",
+			"END:CALENDAR",
+		})
+		local after = ical_str_from({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"SUMMARY:this does not change",
+			"DESCRIPTION:this is new",
+			"END:VTODO",
+			"END:CALENDAR",
+		})
+		eq(after, ic.upsert_ical_prop(before, "DESCRIPTION", "this is new"))
 	end)
 end)
