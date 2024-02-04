@@ -294,7 +294,8 @@ function M.set_entry(connection, path, key, value)
 	assert(key == "null" or vim.startswith(key, '"') and vim.endswith(key, '"'))
 	assert(
 		---@diagnostic disable-next-line: param-type-mismatch
-		value == "null" or vim.startswith(value, '"') and vim.endswith(value, '"')
+		value == "null"
+			or vim.startswith(value, '"') and vim.endswith(value, '"')
 	)
 
 	local path_arr = ffi.new("const char*[?]", #path)
