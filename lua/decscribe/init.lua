@@ -20,6 +20,7 @@ local M = {}
 ---@field description string
 ---@field completed boolean
 ---@field priority string
+---@field categories string[]
 ---@field ical Ical
 local Todo = {}
 
@@ -105,6 +106,13 @@ local function repopulate_buffer()
 		end
 		local todo_ical = vim.fn.json_decode(value)
 		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
+
+		local categories = vim.split(
+			ic.find_ical_prop(todo_ical, "CATEGORIES") or "",
+			",",
+			{ trimempty = true }
+		)
+
 		todos[todo_uid] = {
 			uid = todo_uid,
 			collection = curr_coll_id,
@@ -112,6 +120,7 @@ local function repopulate_buffer()
 			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
 			priority = ic.find_ical_prop(todo_ical, "PRIORITY") or "",
+			categories = categories,
 			ical = todo_ical,
 		}
 	end)
@@ -143,13 +152,16 @@ local function repopulate_buffer()
 	lines = {}
 	for _, uid in ipairs(idx_to_uids) do
 		local todo = todos[uid]
-		local line = ""
-		if todo.summary then
-			line = "- [" .. (todo.completed and "x" or " ") .. "]"
-			line = line .. " " .. todo.summary
-			-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
-			line = line:gsub("\r?\n", " ")
+		local line = "- [" .. (todo.completed and "x" or " ") .. "]"
+		if #todo.categories > 0 then
+			local function in_colons(s) return ":" .. s .. ":" end
+			local categories_str =
+				table.concat(vim.tbl_map(in_colons, todo.categories), " ")
+			line = line .. " " .. categories_str
 		end
+		if todo.summary then line = line .. " " .. todo.summary end
+		-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
+		line = line:gsub("\r?\n", " ")
 		if line then table.insert(lines, line) end
 	end
 
@@ -170,16 +182,10 @@ end
 --- XXX: Indices in `todos` will change - any data referring to those indices
 --- may break unless properly handled.
 local function on_line_added(idx, line)
-	-- TODO: handle more invalid entries
-	local checked = line:match("[-*] +[[]x[]] +")
 	local uid = ic.generate_uid(vim.tbl_keys(todos))
-	---@type ical.vtodo_t
-	local vtodo = {
-		summary = line:gsub("^[-*] +[[][ x][]] +", "", 1),
-		completed = checked and true or false,
-		priority = ic.priority_t.undefined,
-		description = "",
-	}
+	local vtodo = ic.parse_md_line(line)
+	-- TODO: add a diagnostic to the line
+	assert(vtodo, "Invalid line while adding new entry")
 	local ical = ic.create_ical_vtodo(uid, vtodo)
 	---@type Todo
 	local todo = {
@@ -190,6 +196,7 @@ local function on_line_added(idx, line)
 		description = vtodo.description,
 		completed = vtodo.completed,
 		priority = tostring(vtodo.priority),
+		categories = vtodo.categories,
 		ical = ical,
 	}
 	todos[uid] = todo
@@ -203,21 +210,26 @@ local function on_line_changed(idx, old_line, new_line)
 	local changed_todo = todos[idx_to_uids[idx]]
 	local has_changed = false
 
-	if -- todo status got swapped
-		false
-		or (old_line:match("[-*] [[] []]") and new_line:match("[-*] [[]x[]]"))
-		or (old_line:match("[-*] [[]x[]]") and new_line:match("[-*] [[] []]"))
-	then
-		changed_todo.completed = not changed_todo.completed
+	local old_vtodo = ic.parse_md_line(old_line)
+	local new_vtodo = ic.parse_md_line(new_line)
+
+	assert(old_vtodo)
+	assert(new_vtodo)
+
+	if old_vtodo.completed ~= new_vtodo.completed then
+		changed_todo.completed = new_vtodo.completed
 		has_changed = true
 	end
-
-	-- TODO: summary changed
-	local old_line_summary = old_line:gsub("[-*] +[[][ x][]] +", "", 1)
-	local new_line_summary = new_line:gsub("[-*] +[[][ x][]] +", "", 1)
-
-	if old_line_summary ~= new_line_summary then
-		changed_todo.summary = new_line_summary
+	if old_vtodo.summary ~= new_vtodo.summary then
+		changed_todo.summary = new_vtodo.summary
+		has_changed = true
+	end
+	if old_vtodo.description ~= new_vtodo.description then
+		changed_todo.description = new_vtodo.description
+		has_changed = true
+	end
+	if not vim.deep_equal(old_vtodo.categories, new_vtodo.categories) then
+		changed_todo.categories = new_vtodo.categories
 		has_changed = true
 	end
 
