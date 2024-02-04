@@ -39,6 +39,7 @@ M.priority_t = {
 	tasks_org_high = 1,
 	tasks_org_medium = 5,
 	tasks_org_low = 9,
+	-- tasks_org_lowest = nil, -- i.e. no PRIORITY prop at all
 }
 
 --- priority_t:
