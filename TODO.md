@@ -26,7 +26,7 @@
 - [x] `:Decscribe PATH-TO-DECSYNC-DIR COLLECTION-NAME`
 - [x] `:Decscribe` - simple path autocompletion for 1st arg
 - [x] categories/tags
-- [ ] Tasks.org compliance?: sort categories alphabetically
+- [x] Tasks.org compliance?: sort categories alphabetically
 - [ ] priority
 - [ ] start & due dates
 - [ ] subtasks
