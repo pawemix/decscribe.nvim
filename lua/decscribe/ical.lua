@@ -207,19 +207,19 @@ function M.parse_md_line(line)
 
 	local completed = checkbox_heading:match("x") ~= nil
 
-	local rest = line:sub(#checkbox_heading + 1)
+	line = line:sub(#checkbox_heading + 1)
 
 	local categories = {}
 	while true do
-		local cat_start, cat_end, cat = rest:find("^:([-_%a]+):%s*")
+		local cat_start, cat_end, cat = line:find("^:([-_%a]+):%s*")
 		if not cat_start then break end
 		table.insert(categories, cat)
-		rest = rest:sub(cat_end + 1)
+		line = line:sub(cat_end + 1)
 	end
 
 	---@type ical.vtodo_t
 	local vtodo = {
-		summary = rest,
+		summary = line,
 		completed = completed,
 		priority = M.priority_t.undefined,
 		categories = categories,
