@@ -106,4 +106,13 @@ describe("parse_md_line", function()
 		eq(false, actual.completed)
 	end)
 
+	for prio = 1, 9 do
+		it("recognizes priority with a number", function()
+			local line = ("- [ ] !%d something"):format(prio)
+			local actual = ic.parse_md_line(line) or {}
+			-- eq(prio, actual.priority)
+			eq("something", actual.summary)
+			eq(false, actual.completed)
+		end)
+	end
 end)
