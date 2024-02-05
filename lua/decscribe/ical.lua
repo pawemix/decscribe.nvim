@@ -195,9 +195,7 @@ function M.upsert_ical_prop(ical, prop_name, prop_value)
 	then
 		return update_ical_prop(ical, prop_name, prop_value)
 	end
-	if true then
-		return insert_ical_prop(ical, prop_name, prop_value)
-	end
+	return insert_ical_prop(ical, prop_name, prop_value)
 end
 
 ---@return ical.vtodo_t?
