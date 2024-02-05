@@ -112,6 +112,9 @@ local function repopulate_buffer()
 			",",
 			{ trimempty = true }
 		)
+		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+		-- categories alphabetically:
+		table.sort(categories)
 
 		todos[todo_uid] = {
 			uid = todo_uid,

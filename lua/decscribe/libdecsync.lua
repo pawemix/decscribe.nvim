@@ -325,7 +325,11 @@ function M.update_todo(connection, todo)
 	local new_summary = todo.summary
 	ical = ical:sub(1, summary_i - 1) .. new_summary .. ical:sub(summary_j + 1)
 
-	local new_cats_str = table.concat(todo.categories, ",")
+	local new_cats = { unpack(todo.categories) }
+	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+	-- categories alphabetically:
+	table.sort(new_cats)
+	local new_cats_str = table.concat(new_cats, ",")
 	ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
 
 	local ical_json = vim.fn.json_encode(ical)
