@@ -19,7 +19,7 @@ local M = {}
 ---@field summary string
 ---@field description string
 ---@field completed boolean
----@field priority string
+---@field priority integer
 ---@field categories string[]
 ---@field ical Ical
 local Todo = {}
@@ -116,13 +116,19 @@ local function repopulate_buffer()
 		-- categories alphabetically:
 		table.sort(categories)
 
+		local priority = ic.priority_t.undefined
+		local priority_str = ic.find_ical_prop(todo_ical, "PRIORITY")
+		if priority_str and tonumber(priority_str) then
+			priority = tonumber(priority_str) or ic.priority_t.undefined
+		end
+
 		todos[todo_uid] = {
 			uid = todo_uid,
 			collection = curr_coll_id,
 			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
 			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
-			priority = ic.find_ical_prop(todo_ical, "PRIORITY") or "",
+			priority = priority,
 			categories = categories,
 			ical = todo_ical,
 		}
@@ -156,6 +162,9 @@ local function repopulate_buffer()
 	for _, uid in ipairs(idx_to_uids) do
 		local todo = todos[uid]
 		local line = "- [" .. (todo.completed and "x" or " ") .. "]"
+		if todo.priority ~= ic.priority_t.undefined then
+			line = line .. " !" .. todo.priority
+		end
 		if #todo.categories > 0 then
 			local function in_colons(s) return ":" .. s .. ":" end
 			local categories_str =
@@ -198,7 +207,7 @@ local function on_line_added(idx, line)
 		summary = vtodo.summary,
 		description = vtodo.description,
 		completed = vtodo.completed,
-		priority = tostring(vtodo.priority),
+		priority = vtodo.priority,
 		categories = vtodo.categories,
 		ical = ical,
 	}
@@ -233,6 +242,10 @@ local function on_line_changed(idx, old_line, new_line)
 	end
 	if not vim.deep_equal(old_vtodo.categories, new_vtodo.categories) then
 		changed_todo.categories = new_vtodo.categories
+		has_changed = true
+	end
+	if old_vtodo.priority ~= new_vtodo.priority then
+		changed_todo.priority = new_vtodo.priority
 		has_changed = true
 	end
 

@@ -332,6 +332,8 @@ function M.update_todo(connection, todo)
 	local new_cats_str = table.concat(new_cats, ",")
 	ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
 
+	ical = ic.upsert_ical_prop(ical, "PRIORITY", todo.priority)
+
 	local ical_json = vim.fn.json_encode(ical)
 
 	---@diagnostic disable-next-line: param-type-mismatch
