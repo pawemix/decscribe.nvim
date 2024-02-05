@@ -315,15 +315,10 @@ function M.update_todo(connection, todo)
 
 	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
 
-	local status, _, status_i, status_j = ic.find_ical_prop(ical, "STATUS")
-	assert(status)
 	local new_status = todo.completed and "COMPLETED" or "NEEDS-ACTION"
-	ical = ical:sub(1, status_i - 1) .. new_status .. ical:sub(status_j + 1)
+	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
 
-	local summary, _, summary_i, summary_j = ic.find_ical_prop(ical, "SUMMARY")
-	assert(summary)
-	local new_summary = todo.summary
-	ical = ical:sub(1, summary_i - 1) .. new_summary .. ical:sub(summary_j + 1)
+	ical = ic.upsert_ical_prop(ical, "SUMMARY", todo.summary)
 
 	local new_cats = { unpack(todo.categories) }
 	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
