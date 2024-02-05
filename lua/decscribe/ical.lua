@@ -209,6 +209,13 @@ function M.parse_md_line(line)
 
 	line = line:sub(#checkbox_heading + 1)
 
+	local priority = nil
+	local _, prio_end, prio = line:find("^!([0-9])%s*")
+	if prio then
+		priority = tonumber(prio)
+		line = line:sub(prio_end + 1)
+	end
+
 	local categories = {}
 	while true do
 		local cat_start, cat_end, cat = line:find("^:([-_%a]+):%s*")
@@ -221,7 +228,7 @@ function M.parse_md_line(line)
 	local vtodo = {
 		summary = line,
 		completed = completed,
-		priority = M.priority_t.undefined,
+		priority = priority or M.priority_t.undefined,
 		categories = categories,
 		description = nil,
 	}
