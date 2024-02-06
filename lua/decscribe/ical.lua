@@ -43,6 +43,12 @@ M.priority_t = {
 	-- tasks_org_lowest = nil, -- i.e. no PRIORITY prop at all
 }
 
+M.labelled_priorities = vim.tbl_add_reverse_lookup({
+	H = M.priority_t.tasks_org_high,
+	M = M.priority_t.tasks_org_medium,
+	L = M.priority_t.tasks_org_low,
+})
+
 --- priority_t:
 --- 0 = undefined
 --- 1 = highest
@@ -214,9 +220,12 @@ function M.parse_md_line(line)
 	line = line:sub(#checkbox_heading + 1)
 
 	local priority = nil
-	local _, prio_end, prio = line:find("^!([0-9])%s*")
-	if prio then
+	local _, prio_end, prio = line:find("^!([0-9HML])%s*")
+	if tonumber(prio) then
 		priority = tonumber(prio)
+		line = line:sub(prio_end + 1)
+	elseif prio then
+		priority = M.labelled_priorities[prio]
 		line = line:sub(prio_end + 1)
 	end
 
@@ -244,8 +253,9 @@ end
 ---@return string md_line a markdown line representing the todo entry
 function M.to_md_line(vtodo)
 	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
-	if vtodo.priority ~= M.priority_t.undefined then
-		line = line .. " !" .. vtodo.priority
+	if vtodo.priority and vtodo.priority ~= M.priority_t.undefined then
+		local prio_char = M.labelled_priorities[vtodo.priority] or vtodo.priority
+		line = line .. " !" .. prio_char
 	end
 	if #vtodo.categories > 0 then
 		local function in_colons(s) return ":" .. s .. ":" end
