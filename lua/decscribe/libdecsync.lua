@@ -295,6 +295,7 @@ function M.set_entry(connection, path, key, value)
 	assert(
 		---@diagnostic disable-next-line: param-type-mismatch
 		value == "null"
+		---@diagnostic disable-next-line: param-type-mismatch
 			or vim.startswith(value, '"') and vim.endswith(value, '"')
 	)
 
