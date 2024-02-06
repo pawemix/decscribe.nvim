@@ -27,11 +27,14 @@
 - [x] `:Decscribe` - simple path autocompletion for 1st arg
 - [x] categories/tags
 - [x] Tasks.org compliance?: sort categories alphabetically
-- [ ] priority
+- [x] priority as a number
+- [x] priority as a letter
 - [ ] start & due dates
 - [ ] subtasks
 - [ ] handle complex hunks (mix of changes and removals/additions)
+- [ ] built-in <c-a>/<c-i> override to cycle through `[HML]` priorities
 - [ ] when existing items are moved, retain their UIDs instead of deleting and creating?
+- [ ] use extmarks for syntax highlighting?
 - [ ] use extmarks for diff-handling?
 - [ ] preconfigured ds-dirs:
     - `:Decscribe NAME-OF-PRECONFIGURED-DECSYNC-DIR COLLECTION`; and/or
