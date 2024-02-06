@@ -39,6 +39,18 @@ describe("find_ical_prop", function()
 
 		eq("here", ic.find_ical_prop(data, "SUMMARY"))
 	end)
+
+	it("finds prop followed by RELATED-TO", function()
+		local data = ical_str_from({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"SUMMARY:something",
+			"RELATED-TO;RELTYPE=PARENT:1234567890",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq("something", ic.find_ical_prop(data, "SUMMARY"))
+	end)
 end)
 
 describe("upsert_ical_prop", function()
