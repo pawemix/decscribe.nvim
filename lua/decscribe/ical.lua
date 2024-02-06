@@ -240,4 +240,23 @@ function M.parse_md_line(line)
 	return vtodo
 end
 
+---@param vtodo ical.vtodo_t
+---@return string md_line a markdown line representing the todo entry
+function M.to_md_line(vtodo)
+	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
+	if vtodo.priority ~= M.priority_t.undefined then
+		line = line .. " !" .. vtodo.priority
+	end
+	if #vtodo.categories > 0 then
+		local function in_colons(s) return ":" .. s .. ":" end
+		local categories_str =
+			table.concat(vim.tbl_map(in_colons, vtodo.categories), " ")
+		line = line .. " " .. categories_str
+	end
+	if vtodo.summary then line = line .. " " .. vtodo.summary end
+	-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
+	line = line:gsub("\r?\n", " ")
+	return line
+end
+
 return M

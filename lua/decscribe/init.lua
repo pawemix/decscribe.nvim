@@ -163,19 +163,7 @@ local function repopulate_buffer()
 	lines = {}
 	for _, uid in ipairs(idx_to_uids) do
 		local todo = todos[uid]
-		local line = "- [" .. (todo.vtodo.completed and "x" or " ") .. "]"
-		if todo.vtodo.priority ~= ic.priority_t.undefined then
-			line = line .. " !" .. todo.vtodo.priority
-		end
-		if #todo.vtodo.categories > 0 then
-			local function in_colons(s) return ":" .. s .. ":" end
-			local categories_str =
-				table.concat(vim.tbl_map(in_colons, todo.vtodo.categories), " ")
-			line = line .. " " .. categories_str
-		end
-		if todo.vtodo.summary then line = line .. " " .. todo.vtodo.summary end
-		-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
-		line = line:gsub("\r?\n", " ")
+		local line = ic.to_md_line(todo.vtodo)
 		if line then table.insert(lines, line) end
 	end
 
