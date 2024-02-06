@@ -311,23 +311,24 @@ end
 function M.update_todo(connection, todo)
 	local uid = todo.uid
 	local ical = todo.ical
+	local vtodo = todo.vtodo
 	local path = { "resources", uid }
 
 	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
 
-	local new_status = todo.completed and "COMPLETED" or "NEEDS-ACTION"
+	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
 	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
 
-	ical = ic.upsert_ical_prop(ical, "SUMMARY", todo.summary)
+	ical = ic.upsert_ical_prop(ical, "SUMMARY", vtodo.summary)
 
-	local new_cats = { unpack(todo.categories) }
+	local new_cats = { unpack(vtodo.categories) }
 	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
 	-- categories alphabetically:
 	table.sort(new_cats)
 	local new_cats_str = table.concat(new_cats, ",")
 	ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
 
-	ical = ic.upsert_ical_prop(ical, "PRIORITY", todo.priority)
+	ical = ic.upsert_ical_prop(ical, "PRIORITY", vtodo.priority)
 
 	local ical_json = vim.fn.json_encode(ical)
 

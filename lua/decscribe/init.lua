@@ -9,19 +9,11 @@ local M = {}
 ---@alias CompleteCustomListFunc
 ---| fun(arg_lead: string, cmd_line: string, cursor_pos: integer): string[]
 
----@alias Ical string
-
----@alias Uid string
-
 ---@class Todo
----@field uid string
+---@field uid ical.uid_t
 ---@field collection string
----@field summary string
----@field description string
----@field completed boolean
----@field priority integer
----@field categories string[]
----@field ical Ical
+---@field vtodo ical.vtodo_t
+---@field ical ical.ical_t
 local Todo = {}
 
 -- Constants
@@ -36,9 +28,9 @@ local APP_NAME = "decscribe"
 local conn = nil
 ---@type integer?
 local main_buf_nr = nil
----@type table<Uid, Todo>
+---@type table<ical.uid_t, Todo>
 local todos = {}
----@type table<number, Uid>
+---@type table<number, ical.uid_t>
 local idx_to_uids = {}
 ---@type string[]
 local lines = {}
@@ -98,6 +90,8 @@ local function repopulate_buffer()
 
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
+		---@type ical.uid_t
+		---@diagnostic disable-next-line: assign-type-mismatch
 		local todo_uid = path[1]
 		if value == "null" then
 			-- nil value means entry was deleted
@@ -122,16 +116,24 @@ local function repopulate_buffer()
 			priority = tonumber(priority_str) or ic.priority_t.undefined
 		end
 
-		todos[todo_uid] = {
-			uid = todo_uid,
-			collection = curr_coll_id,
-			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
-			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
+		---@type ical.vtodo_t
+		local vtodo = {
 			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
 			priority = priority,
+			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
 			categories = categories,
-			ical = todo_ical,
+			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 		}
+
+		---@type Todo
+		local todo = {
+			vtodo = vtodo,
+			ical = todo_ical,
+			uid = todo_uid,
+			collection = curr_coll_id,
+		}
+
+		todos[todo_uid] = todo
 	end)
 	lds.init_done(conn)
 
@@ -145,33 +147,33 @@ local function repopulate_buffer()
 	end
 
 	table.sort(idx_to_uids, function(uid1, uid2)
-		local completed1 = todos[uid1].completed and 1 or 0
-		local completed2 = todos[uid2].completed and 1 or 0
+		local completed1 = todos[uid1].vtodo.completed and 1 or 0
+		local completed2 = todos[uid2].vtodo.completed and 1 or 0
 		if completed1 ~= completed2 then return completed1 < completed2 end
 
-		local priority1 = tonumber(todos[uid1].priority) or 0
-		local priority2 = tonumber(todos[uid2].priority) or 0
+		local priority1 = tonumber(todos[uid1].vtodo.priority) or 0
+		local priority2 = tonumber(todos[uid2].vtodo.priority) or 0
 		if priority1 ~= priority2 then return priority1 < priority2 end
 
-		local summary1 = todos[uid1].summary
-		local summary2 = todos[uid2].summary
+		local summary1 = todos[uid1].vtodo.summary
+		local summary2 = todos[uid2].vtodo.summary
 		return summary1 < summary2
 	end)
 
 	lines = {}
 	for _, uid in ipairs(idx_to_uids) do
 		local todo = todos[uid]
-		local line = "- [" .. (todo.completed and "x" or " ") .. "]"
-		if todo.priority ~= ic.priority_t.undefined then
-			line = line .. " !" .. todo.priority
+		local line = "- [" .. (todo.vtodo.completed and "x" or " ") .. "]"
+		if todo.vtodo.priority ~= ic.priority_t.undefined then
+			line = line .. " !" .. todo.vtodo.priority
 		end
-		if #todo.categories > 0 then
+		if #todo.vtodo.categories > 0 then
 			local function in_colons(s) return ":" .. s .. ":" end
 			local categories_str =
-				table.concat(vim.tbl_map(in_colons, todo.categories), " ")
+				table.concat(vim.tbl_map(in_colons, todo.vtodo.categories), " ")
 			line = line .. " " .. categories_str
 		end
-		if todo.summary then line = line .. " " .. todo.summary end
+		if todo.vtodo.summary then line = line .. " " .. todo.vtodo.summary end
 		-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
 		line = line:gsub("\r?\n", " ")
 		if line then table.insert(lines, line) end
@@ -188,6 +190,7 @@ local function on_line_removed(idx)
 	local uid = idx_to_uids[idx]
 	table.remove(idx_to_uids, idx)
 	todos[uid] = nil
+---@diagnostic disable-next-line: assign-type-mismatch
 	lds.set_entry(conn, { "resources", uid }, nil, nil)
 end
 
@@ -201,14 +204,9 @@ local function on_line_added(idx, line)
 	local ical = ic.create_ical_vtodo(uid, vtodo)
 	---@type Todo
 	local todo = {
-		---@diagnostic disable-next-line: assign-type-mismatch
 		uid = uid,
 		collection = curr_coll_id,
-		summary = vtodo.summary,
-		description = vtodo.description,
-		completed = vtodo.completed,
-		priority = vtodo.priority,
-		categories = vtodo.categories,
+		vtodo = vtodo,
 		ical = ical,
 	}
 	todos[uid] = todo
@@ -229,23 +227,23 @@ local function on_line_changed(idx, old_line, new_line)
 	assert(new_vtodo)
 
 	if old_vtodo.completed ~= new_vtodo.completed then
-		changed_todo.completed = new_vtodo.completed
+		changed_todo.vtodo.completed = new_vtodo.completed
 		has_changed = true
 	end
 	if old_vtodo.summary ~= new_vtodo.summary then
-		changed_todo.summary = new_vtodo.summary
+		changed_todo.vtodo.summary = new_vtodo.summary
 		has_changed = true
 	end
 	if old_vtodo.description ~= new_vtodo.description then
-		changed_todo.description = new_vtodo.description
+		changed_todo.vtodo.description = new_vtodo.description
 		has_changed = true
 	end
 	if not vim.deep_equal(old_vtodo.categories, new_vtodo.categories) then
-		changed_todo.categories = new_vtodo.categories
+		changed_todo.vtodo.categories = new_vtodo.categories
 		has_changed = true
 	end
 	if old_vtodo.priority ~= new_vtodo.priority then
-		changed_todo.priority = new_vtodo.priority
+		changed_todo.vtodo.priority = new_vtodo.priority
 		has_changed = true
 	end
 
