@@ -4,9 +4,7 @@ local ic = require("decscribe.ical")
 
 local eq = assert.are_same
 
-local function ical_str_from(lines)
-	return table.concat(lines, "\r\n") .. "\r\n"
-end
+local function ical_str_from(lines) return table.concat(lines, "\r\n") .. "\r\n" end
 
 describe("find_ical_prop", function()
 	local one_prop_data = table.concat({
@@ -22,7 +20,7 @@ describe("find_ical_prop", function()
 		eq("something", prop)
 	end)
 
-	it("points at the first char of the prop name", function ()
+	it("points at the first char of the prop name", function()
 		local _, key_i, _, _ = ic.find_ical_prop(one_prop_data, "DESCRIPTION")
 		-- 16 + 13 + 1 ("\n" -> "D") = 30
 		eq(30, key_i)
@@ -63,7 +61,7 @@ describe("upsert_ical_prop", function()
 		eq(after, ic.upsert_ical_prop(before, "DESCRIPTION", "this has changed"))
 	end)
 
-	it("inserts description after summary", function ()
+	it("inserts description after summary", function()
 		local before = ical_str_from({
 			"BEGIN:CALENDAR",
 			"BEGIN:VTODO",
