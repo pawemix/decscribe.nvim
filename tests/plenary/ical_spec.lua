@@ -125,4 +125,18 @@ describe("parse_md_line", function()
 			eq(false, actual.completed)
 		end)
 	end
+
+	for char, num in pairs({
+		H = ic.priority_t.tasks_org_high,
+		M = ic.priority_t.tasks_org_medium,
+		L = ic.priority_t.tasks_org_low,
+	}) do
+		it("recognizes priority with a letter", function()
+			local line = ("- [ ] !%s something"):format(char)
+			local actual = ic.parse_md_line(line) or {}
+			eq(num, actual.priority)
+			eq("something", actual.summary)
+			eq(false, actual.completed)
+		end)
+	end
 end)
