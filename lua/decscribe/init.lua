@@ -178,7 +178,7 @@ local function on_line_removed(idx)
 	local uid = idx_to_uids[idx]
 	table.remove(idx_to_uids, idx)
 	todos[uid] = nil
----@diagnostic disable-next-line: assign-type-mismatch
+	---@diagnostic disable-next-line: assign-type-mismatch
 	lds.set_entry(conn, { "resources", uid }, nil, nil)
 end
 
