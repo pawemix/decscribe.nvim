@@ -2,6 +2,18 @@
 
 local ic = require("decscribe.ical")
 
+---Like `assert.are_same`, but consider only keys present in both tables.
+---@param expected table
+---@param actual table
+local function assert_intersections_are_same(expected, actual)
+	local actual_subset = {}
+	for k, v in pairs(actual) do
+		if expected[k] ~= nil then actual_subset[k] = v end
+	end
+	assert.are_same(expected, actual_subset)
+end
+
+local ieq = assert_intersections_are_same
 local eq = assert.are_same
 
 local function ical_str_from(lines) return table.concat(lines, "\r\n") .. "\r\n" end
@@ -108,21 +120,17 @@ describe("parse_md_line", function()
 
 	it("recognizes one category", function()
 		local line = "- [ ] :edu: write thesis"
-		---@type ical.vtodo_t
-		local actual = ic.parse_md_line(line) or {}
-
-		eq("write thesis", actual.summary)
-		eq({ "edu" }, actual.categories)
-		eq(false, actual.completed)
+		local expected =
+			{ summary = "write thesis", completed = false, categories = { "edu" } }
+		ieq(expected, ic.parse_md_line(line) or {})
 	end)
 
 	for prio = 1, 9 do
 		it("recognizes priority with a number", function()
 			local line = ("- [ ] !%d something"):format(prio)
-			local actual = ic.parse_md_line(line) or {}
-			-- eq(prio, actual.priority)
-			eq("something", actual.summary)
-			eq(false, actual.completed)
+			local expected =
+				{ priority = prio, summary = "something", completed = false }
+			ieq(expected, ic.parse_md_line(line) or {})
 		end)
 	end
 
@@ -133,10 +141,9 @@ describe("parse_md_line", function()
 	}) do
 		it("recognizes priority with a letter", function()
 			local line = ("- [ ] !%s something"):format(char)
-			local actual = ic.parse_md_line(line) or {}
-			eq(num, actual.priority)
-			eq("something", actual.summary)
-			eq(false, actual.completed)
+			local expected =
+				{ priority = num, summary = "something", completed = false }
+			ieq(expected, ic.parse_md_line(line) or {})
 		end)
 	end
 end)
