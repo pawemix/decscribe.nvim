@@ -84,10 +84,14 @@ function M.create_ical_vtodo(uid, vtodo)
 	local created_stamp = os.date("!%Y%m%dT%H%M%SZ")
 
 	local priority = vtodo.priority or M.priority_t.undefined
-	local description = vtodo.description:gsub(
-		"[\r\n]",
-		function(s) return "\\" .. s end
-	) or ""
+
+	local description = nil
+	if type(vtodo.description) == "string" then
+		description = vtodo.description:gsub(
+			"[\r\n]",
+			function(s) return "\\" .. s end
+		)
+	end
 	-- TODO: summary: enforce RFC 5545 compliance (no newlines, no semicolons,
 	-- 75 chars maximum)
 	local summary = vtodo.summary:gsub("[\r\n;]", ". ") or ""
@@ -106,7 +110,7 @@ function M.create_ical_vtodo(uid, vtodo)
 		"CREATED:" .. created_stamp, -- TODO: parameterize? vtodo.created
 		"LAST-MODIFIED:" .. created_stamp,
 		"SUMMARY:" .. summary,
-		"DESCRIPTION:" .. description,
+		(description and ("DESCRIPTION:" .. description) or {}),
 		"PRIORITY:" .. priority,
 		"STATUS:" .. (vtodo.completed and "COMPLETED" or "NEEDS-ACTION"),
 		"CATEGORIES:" .. categories,
