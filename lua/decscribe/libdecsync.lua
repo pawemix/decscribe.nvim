@@ -331,6 +331,11 @@ function M.update_todo(connection, todo)
 
 	ical = ic.upsert_ical_prop(ical, "PRIORITY", vtodo.priority)
 
+	if vtodo.parent_uid then
+		ical =
+			ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", vtodo.parent_uid)
+	end
+
 	local ical_json = vim.fn.json_encode(ical)
 
 	---@diagnostic disable-next-line: param-type-mismatch
