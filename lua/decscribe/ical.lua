@@ -10,6 +10,7 @@ local M = {}
 ---@field completed boolean
 ---@field priority number?
 ---@field categories string[]?
+---@field parent_uid ical.uid_t?
 local vtodo_t = {}
 
 local ICAL_PROP_NAMES = {
@@ -99,6 +100,9 @@ function M.create_ical_vtodo(uid, vtodo)
 	-- TODO: enforce no colons nor CRLFs in category names
 	local categories = table.concat(vtodo.categories or {}, ",")
 
+	local parent_uid_entry =
+		(vtodo.parent_uid and "RELATED-TO;RELTYPE=PARENT:" .. vtodo.parent_uid or {})
+
 	return table.concat(vim.tbl_flatten({
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
@@ -115,7 +119,7 @@ function M.create_ical_vtodo(uid, vtodo)
 		"STATUS:" .. (vtodo.completed and "COMPLETED" or "NEEDS-ACTION"),
 		"CATEGORIES:" .. categories,
 		-- "X-APPLE-SORT-ORDER:123456789",
-		-- RELATED-TO;RELTYPE=PARENT:<uid>
+		parent_uid_entry,
 		"COMPLETED:" .. created_stamp,
 		"PERCENT-COMPLETE:" .. (vtodo.completed and "100" or "0"),
 		"END:VTODO",
