@@ -79,6 +79,20 @@ local function list_collections(ds_dir)
 	return coll_name_to_ids
 end
 
+local function default_compare_vtodos(vtodo1, vtodo2)
+		local completed1 = vtodo1.completed and 1 or 0
+		local completed2 = vtodo2.completed and 1 or 0
+		if completed1 ~= completed2 then return completed1 < completed2 end
+
+		local priority1 = tonumber(vtodo1.priority) or 0
+		local priority2 = tonumber(vtodo2.priority) or 0
+		if priority1 ~= priority2 then return priority1 < priority2 end
+
+		local summary1 = vtodo1.summary
+		local summary2 = vtodo2.summary
+		return summary1 < summary2
+end
+
 local function repopulate_buffer()
 	if main_buf_nr == nil then return end
 	assert(main_buf_nr ~= nil)
@@ -146,22 +160,7 @@ local function repopulate_buffer()
 		table.insert(idx_to_uids, uid)
 	end
 
-	table.sort(idx_to_uids, function(uid1, uid2)
-		local vtodo1 = todos[uid1].vtodo
-		local vtodo2 = todos[uid2].vtodo
-
-		local completed1 = vtodo1.completed and 1 or 0
-		local completed2 = vtodo2.completed and 1 or 0
-		if completed1 ~= completed2 then return completed1 < completed2 end
-
-		local priority1 = tonumber(vtodo1.priority) or 0
-		local priority2 = tonumber(vtodo2.priority) or 0
-		if priority1 ~= priority2 then return priority1 < priority2 end
-
-		local summary1 = vtodo1.summary
-		local summary2 = vtodo2.summary
-		return summary1 < summary2
-	end)
+	table.sort(idx_to_uids, default_compare_vtodos)
 
 	lines = {}
 	for _, uid in ipairs(idx_to_uids) do
