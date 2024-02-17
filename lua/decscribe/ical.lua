@@ -1,6 +1,6 @@
 local M = {}
 
----@class (exact) ical.uid_t
+---@alias ical.uid_t string
 
 ---@alias ical.ical_t string
 
