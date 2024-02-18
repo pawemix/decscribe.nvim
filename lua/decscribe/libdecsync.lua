@@ -308,7 +308,7 @@ function M.set_entry(connection, path, key, value)
 end
 
 ---@param connection Connection
----@param todo Todo
+---@param todo tasks.Task
 function M.update_todo(connection, todo)
 	local uid = todo.uid
 	local ical = todo.ical

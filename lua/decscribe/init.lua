@@ -1,5 +1,6 @@
 local lds = require("decscribe.libdecsync")
 local ic = require("decscribe.ical")
+local ts = require("decscribe.tasks")
 
 local M = {}
 
@@ -8,13 +9,6 @@ local M = {}
 
 ---@alias CompleteCustomListFunc
 ---| fun(arg_lead: string, cmd_line: string, cursor_pos: integer): string[]
-
----@class Todo
----@field uid ical.uid_t
----@field collection string
----@field vtodo ical.vtodo_t
----@field ical ical.ical_t
-local Todo = {}
 
 -- Constants
 ------------
@@ -28,10 +22,8 @@ local APP_NAME = "decscribe"
 local conn = nil
 ---@type integer?
 local main_buf_nr = nil
----@type table<ical.uid_t, Todo>
-local todos = {}
----@type table<number, ical.uid_t>
-local idx_to_uids = {}
+---@type tasks.Tasks
+local tasks = ts.Tasks:new()
 ---@type string[]
 local lines = {}
 ---@type string
@@ -79,25 +71,15 @@ local function list_collections(ds_dir)
 	return coll_name_to_ids
 end
 
-local function default_compare_vtodos(vtodo1, vtodo2)
-		local completed1 = vtodo1.completed and 1 or 0
-		local completed2 = vtodo2.completed and 1 or 0
-		if completed1 ~= completed2 then return completed1 < completed2 end
-
-		local priority1 = tonumber(vtodo1.priority) or 0
-		local priority2 = tonumber(vtodo2.priority) or 0
-		if priority1 ~= priority2 then return priority1 < priority2 end
-
-		local summary1 = vtodo1.summary
-		local summary2 = vtodo2.summary
-		return summary1 < summary2
-end
-
 local function repopulate_buffer()
 	if main_buf_nr == nil then return end
 	assert(main_buf_nr ~= nil)
 	assert(curr_coll_id)
 	assert(decsync_dir)
+
+	-- tasklist has to be recreated from scratch, so that there are no leftovers,
+	-- e.g. from a different collection/dsdir
+	tasks = ts.Tasks:new()
 
 	conn =
 		lds.connect(decsync_dir, "tasks", curr_coll_id, lds.get_app_id(APP_NAME))
@@ -109,7 +91,7 @@ local function repopulate_buffer()
 		local todo_uid = path[1]
 		if value == "null" then
 			-- nil value means entry was deleted
-			todos[todo_uid] = nil
+			tasks:delete(todo_uid)
 			return
 		end
 		local todo_ical = vim.fn.json_decode(value)
@@ -139,7 +121,7 @@ local function repopulate_buffer()
 			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
 		}
 
-		---@type Todo
+		---@type tasks.Task
 		local todo = {
 			vtodo = vtodo,
 			ical = todo_ical,
@@ -147,7 +129,7 @@ local function repopulate_buffer()
 			collection = curr_coll_id,
 		}
 
-		todos[todo_uid] = todo
+		tasks:add(todo_uid, todo)
 	end)
 	lds.init_done(conn)
 
@@ -155,17 +137,9 @@ local function repopulate_buffer()
 	lds.init_stored_entries(conn)
 	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
 
-	idx_to_uids = {}
-	for uid, _ in pairs(todos) do
-		table.insert(idx_to_uids, uid)
-	end
-
-	table.sort(idx_to_uids, default_compare_vtodos)
-
 	lines = {}
-	for _, uid in ipairs(idx_to_uids) do
-		local todo = todos[uid]
-		local line = ic.to_md_line(todo.vtodo)
+	for _, task in ipairs(tasks:to_list()) do
+		local line = ic.to_md_line(task.vtodo)
 		if line then table.insert(lines, line) end
 	end
 
@@ -177,37 +151,42 @@ end
 --- XXX: Indices in `todos` will change - any data referring to those indices
 --- may break unless properly handled.
 local function on_line_removed(idx)
-	local uid = idx_to_uids[idx]
-	table.remove(idx_to_uids, idx)
-	todos[uid] = nil
+	local deleted_task = tasks:delete_at(idx)
+	assert(
+		deleted_task,
+		"Tried deleting task at index " .. idx .. "but there was nothing there"
+	)
 	---@diagnostic disable-next-line: assign-type-mismatch
-	lds.set_entry(conn, { "resources", uid }, nil, nil)
+	lds.set_entry(conn, { "resources", deleted_task.uid }, nil, nil)
 end
 
 --- XXX: Indices in `todos` will change - any data referring to those indices
 --- may break unless properly handled.
 local function on_line_added(idx, line)
-	local uid = ic.generate_uid(vim.tbl_keys(todos))
+	local uid = ic.generate_uid(tasks:uids())
 	local vtodo = ic.parse_md_line(line)
 	-- TODO: add a diagnostic to the line
 	assert(vtodo, "Invalid line while adding new entry")
 	local ical = ic.create_ical_vtodo(uid, vtodo)
-	---@type Todo
+	---@type tasks.Task
 	local todo = {
 		uid = uid,
 		collection = curr_coll_id,
 		vtodo = vtodo,
 		ical = ical,
 	}
-	todos[uid] = todo
-	table.insert(idx_to_uids, idx, uid)
+	tasks:add_at(idx, todo)
 	local ical_json = vim.fn.json_encode(ical)
 	---@diagnostic disable-next-line: assign-type-mismatch, param-type-mismatch
 	lds.set_entry(conn, { "resources", uid }, nil, ical_json)
 end
 
 local function on_line_changed(idx, old_line, new_line)
-	local changed_todo = todos[idx_to_uids[idx]]
+	local changed_todo = tasks:get_at(idx)
+	assert(
+		changed_todo,
+		"Expected an existing task at " .. idx .. " but found nothing"
+	)
 	local has_changed = false
 
 	local old_vtodo = ic.parse_md_line(old_line)
@@ -237,7 +216,10 @@ local function on_line_changed(idx, old_line, new_line)
 		has_changed = true
 	end
 
-	if has_changed then lds.update_todo(conn, changed_todo) end
+	if has_changed then
+		tasks:update_at(idx, changed_todo.vtodo)
+		lds.update_todo(conn, changed_todo)
+	end
 end
 
 function M.setup()
