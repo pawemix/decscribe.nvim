@@ -203,6 +203,9 @@ local function update_ical_prop(ical, prop_name, prop_value)
 	return table.concat(ical_lines, "\r\n")
 end
 
+---@param ical ical.ical_t
+---@param prop_name string
+---@param prop_value string
 ---@return ical.ical_t new_ical
 function M.upsert_ical_prop(ical, prop_name, prop_value)
 	local ical_lines = vim.split(ical, "\r\n")

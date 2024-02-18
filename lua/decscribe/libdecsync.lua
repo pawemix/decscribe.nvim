@@ -320,20 +320,29 @@ function M.update_todo(connection, todo)
 	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
 	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
 
-	ical = ic.upsert_ical_prop(ical, "SUMMARY", vtodo.summary)
+	local summary = vtodo.summary
+	if summary then
+		ical = ic.upsert_ical_prop(ical, "SUMMARY", summary)
+	end
 
-	local new_cats = { unpack(vtodo.categories) }
-	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
-	-- categories alphabetically:
-	table.sort(new_cats)
-	local new_cats_str = table.concat(new_cats, ",")
-	ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
+	local categories = vtodo.categories
+	if categories then
+		local new_cats = { unpack(categories) }
+		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+		-- categories alphabetically:
+		table.sort(new_cats)
+		local new_cats_str = table.concat(new_cats, ",")
+		ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
+	end
 
-	ical = ic.upsert_ical_prop(ical, "PRIORITY", vtodo.priority)
+	local priority = vtodo.priority
+	if priority then
+		ical = ic.upsert_ical_prop(ical, "PRIORITY", tostring(priority))
+	end
 
-	if vtodo.parent_uid then
-		ical =
-			ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", vtodo.parent_uid)
+	local parent_uid = vtodo.parent_uid
+	if parent_uid then
+		ical = ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", parent_uid)
 	end
 
 	local ical_json = vim.fn.json_encode(ical)
