@@ -101,10 +101,13 @@ function M.create_ical_vtodo(uid, vtodo)
 	-- TODO: enforce no colons nor CRLFs in category names
 	local categories = table.concat(vtodo.categories or {}, ",")
 
-	local parent_uid_entry =
-		(vtodo.parent_uid and "RELATED-TO;RELTYPE=PARENT:" .. vtodo.parent_uid or {})
+	---@type table|string
+	local parent_uid_entry = {}
+	if vtodo.parent_uid then
+		parent_uid_entry = "RELATED-TO;RELTYPE=PARENT:" .. vtodo.parent_uid
+	end
 
-	return table.concat(vim.tbl_flatten({
+	local out = vim.tbl_flatten({
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
 		"BEGIN:VTODO",
@@ -125,7 +128,8 @@ function M.create_ical_vtodo(uid, vtodo)
 		"PERCENT-COMPLETE:" .. (vtodo.completed and "100" or "0"),
 		"END:VTODO",
 		"END:VCALENDAR",
-	}), "\r\n")
+	})
+	return table.concat(out, "\r\n")
 end
 
 ---Returns nothing (`nil`) if there were no matches.
