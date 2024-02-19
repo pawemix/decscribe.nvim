@@ -166,36 +166,12 @@ local function on_line_changed(idx, old_line, new_line)
 		changed_todo,
 		"Expected an existing task at " .. idx .. " but found nothing"
 	)
-	local has_changed = false
 
-	local old_vtodo = ic.parse_md_line(old_line)
 	local new_vtodo = ic.parse_md_line(new_line)
-
-	assert(old_vtodo)
 	assert(new_vtodo)
 
-	if old_vtodo.completed ~= new_vtodo.completed then
-		changed_todo.vtodo.completed = new_vtodo.completed
-		has_changed = true
-	end
-	if old_vtodo.summary ~= new_vtodo.summary then
-		changed_todo.vtodo.summary = new_vtodo.summary
-		has_changed = true
-	end
-	if old_vtodo.description ~= new_vtodo.description then
-		changed_todo.vtodo.description = new_vtodo.description
-		has_changed = true
-	end
-	if not vim.deep_equal(old_vtodo.categories, new_vtodo.categories) then
-		changed_todo.vtodo.categories = new_vtodo.categories
-		has_changed = true
-	end
-	if old_vtodo.priority ~= new_vtodo.priority then
-		changed_todo.vtodo.priority = new_vtodo.priority
-		has_changed = true
-	end
-
-	if has_changed then
+	if not vim.deep_equal(changed_todo.vtodo, new_vtodo) then
+		changed_todo.vtodo = vim.tbl_extend("force", changed_todo.vtodo, new_vtodo)
 		tasks:update_at(idx, changed_todo.vtodo)
 		lds.update_todo(conn, changed_todo)
 	end
