@@ -97,29 +97,8 @@ local function repopulate_buffer()
 		local todo_ical = vim.fn.json_decode(value)
 		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
 
-		local categories = vim.split(
-			ic.find_ical_prop(todo_ical, "CATEGORIES") or "",
-			",",
-			{ trimempty = true }
-		)
-		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
-		-- categories alphabetically:
-		table.sort(categories)
-
-		local priority = ic.priority_t.undefined
-		local priority_str = ic.find_ical_prop(todo_ical, "PRIORITY")
-		if priority_str and tonumber(priority_str) then
-			priority = tonumber(priority_str) or ic.priority_t.undefined
-		end
-
 		---@type ical.vtodo_t
-		local vtodo = {
-			completed = ic.find_ical_prop(todo_ical, "STATUS") == "COMPLETED",
-			priority = priority,
-			summary = ic.find_ical_prop(todo_ical, "SUMMARY") or "",
-			categories = categories,
-			description = ic.find_ical_prop(todo_ical, "DESCRIPTION") or "",
-		}
+		local vtodo = ic.vtodo_from_ical(todo_ical)
 
 		---@type tasks.Task
 		local todo = {

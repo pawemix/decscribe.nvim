@@ -281,4 +281,34 @@ function M.to_md_line(vtodo)
 	return line
 end
 
+---@param ical ical.ical_t
+---@return ical.vtodo_t
+function M.vtodo_from_ical(ical)
+	local categories = vim.split(
+		M.find_ical_prop(ical, "CATEGORIES") or "",
+		",",
+		{ trimempty = true }
+	)
+	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+	-- categories alphabetically:
+	table.sort(categories)
+
+	local priority = M.priority_t.undefined
+	local priority_str = M.find_ical_prop(ical, "PRIORITY")
+	if priority_str and tonumber(priority_str) then
+		priority = tonumber(priority_str) or M.priority_t.undefined
+	end
+
+	---@type ical.vtodo_t
+	local vtodo = {
+		completed = M.find_ical_prop(ical, "STATUS") == "COMPLETED",
+		priority = priority,
+		summary = M.find_ical_prop(ical, "SUMMARY") or "",
+		categories = categories,
+		description = M.find_ical_prop(ical, "DESCRIPTION") or "",
+		parent_uid = M.find_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT"),
+	}
+	return vtodo
+end
+
 return M
