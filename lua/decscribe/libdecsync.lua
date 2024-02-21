@@ -11,7 +11,7 @@ M.SyncType = {
 	-- ... TODO
 }
 
----@class (exact) libdecsync.json_string_t
+---@alias libdecsync.json_string_t string
 
 ---@alias Callback
 ---| fun(path: string[], datetime: string, key: string?, value: string?)
