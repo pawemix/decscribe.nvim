@@ -1,11 +1,7 @@
-local lds = require("decscribe.libdecsync")
 local ic = require("decscribe.ical")
 local ts = require("decscribe.tasks")
 
 local M = {}
-
----@type string
-local APP_NAME = "decscribe"
 
 ---@class (exact) decscribe.State
 ---@field conn Connection?
@@ -19,14 +15,14 @@ local APP_NAME = "decscribe"
 ---may break unless properly handled.
 ---@param state decscribe.State
 ---@param idx integer
-local function on_line_removed(state, idx)
+---@param params decscribe.WriteBufferParams
+local function on_line_removed(state, idx, params)
 	local deleted_task = state.tasks:delete_at(idx)
 	assert(
 		deleted_task,
 		"Tried deleting task at index " .. idx .. "but there was nothing there"
 	)
-	---@diagnostic disable-next-line: assign-type-mismatch
-	lds.set_entry(state.conn, { "resources", deleted_task.uid }, nil, nil)
+	params.db_delete_ical(deleted_task.uid)
 end
 
 ---XXX: Indices in `todos` will change - any data referring to those indices
@@ -34,7 +30,8 @@ end
 ---@param state decscribe.State
 ---@param idx integer
 ---@param line string
-local function on_line_added(state, idx, line)
+---@param params decscribe.WriteBufferParams
+local function on_line_added(state, idx, line, params)
 	local uid = ic.generate_uid(state.tasks:uids())
 	local vtodo = ic.parse_md_line(line)
 	-- TODO: add a diagnostic to the line
@@ -48,35 +45,71 @@ local function on_line_added(state, idx, line)
 		ical = ical,
 	}
 	state.tasks:add_at(idx, todo)
-	local ical_json = vim.fn.json_encode(ical)
-	---@diagnostic disable-next-line: assign-type-mismatch, param-type-mismatch
-	lds.set_entry(state.conn, { "resources", uid }, nil, ical_json)
+	params.db_update_ical(uid, ical)
 end
 
 ---@param state decscribe.State
 ---@param idx integer
 ---@param new_line string
-local function on_line_changed(state, idx, new_line)
+---@param params decscribe.WriteBufferParams
+local function on_line_changed(state, idx, new_line, params)
 	local changed_todo = state.tasks:get_at(idx)
 	assert(
 		changed_todo,
 		"Expected an existing task at " .. idx .. " but found nothing"
 	)
-	--
+
 	local new_vtodo = ic.parse_md_line(new_line)
 	assert(new_vtodo)
-	--
-	if not vim.deep_equal(changed_todo.vtodo, new_vtodo) then
-		changed_todo.vtodo = vim.tbl_extend("force", changed_todo.vtodo, new_vtodo)
-		state.tasks:update_at(idx, changed_todo.vtodo)
-		lds.update_todo(state.conn, changed_todo)
+
+	if vim.deep_equal(changed_todo.vtodo, new_vtodo) then
+		return
 	end
+
+	changed_todo.vtodo = vim.tbl_extend("force", changed_todo.vtodo, new_vtodo)
+	state.tasks:update_at(idx, changed_todo.vtodo)
+	local uid = changed_todo.uid
+	local ical = changed_todo.ical
+	local vtodo = changed_todo.vtodo
+
+	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
+
+	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
+	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
+
+	local summary = vtodo.summary
+	if summary then
+		ical = ic.upsert_ical_prop(ical, "SUMMARY", summary)
+	end
+
+	local categories = vtodo.categories
+	if categories then
+		local new_cats = { unpack(categories) }
+		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+		-- categories alphabetically:
+		table.sort(new_cats)
+		local new_cats_str = table.concat(new_cats, ",")
+		ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
+	end
+
+	local priority = vtodo.priority
+	if priority then
+		ical = ic.upsert_ical_prop(ical, "PRIORITY", tostring(priority))
+	end
+
+	local parent_uid = vtodo.parent_uid
+	if parent_uid then
+		ical = ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", parent_uid)
+	end
+
+	params.db_update_ical(uid, ical)
 end
 
 ---@class (exact) decscribe.OpenBufferParams
 ---@field decsync_dir string
 ---@field collection_label decscribe.CollLabel
 ---@field list_collections_fn fun(ds_dir_path: string): decscribe.Collections
+---@field read_buffer_params decscribe.ReadBufferParams
 
 ---@param state decscribe.State
 ---@param params decscribe.OpenBufferParams
@@ -137,11 +170,15 @@ function M.open_buffer(state, params)
 		vim.api.nvim_set_current_buf(state.main_buf_nr)
 	end
 
-	M.read_buffer(state)
+	M.read_buffer(state, params.read_buffer_params)
 end
 
+---@class (exact) decscribe.ReadBufferParams
+---@field db_retrieve_icals fun(): table<ical.uid_t, ical.ical_t>
+
 ---@param state decscribe.State
-function M.read_buffer(state)
+---@param params decscribe.ReadBufferParams
+function M.read_buffer(state, params)
 	if state.main_buf_nr == nil then return end
 	assert(state.main_buf_nr ~= nil)
 	assert(state.curr_coll_id)
@@ -151,22 +188,9 @@ function M.read_buffer(state)
 	-- e.g. from a different collection/dsdir
 	state.tasks = ts.Tasks:new()
 
-	state.conn =
-		lds.connect(state.decsync_dir, "tasks", state.curr_coll_id, lds.get_app_id(APP_NAME))
+	local uid_to_icals = params.db_retrieve_icals()
 
-	lds.add_listener(state.conn, { "resources" }, function(path, _, _, value)
-		assert(#path == 1, "Unexpected path length while reading updated entry")
-		---@type ical.uid_t
-		---@diagnostic disable-next-line: assign-type-mismatch
-		local todo_uid = path[1]
-		if value == "null" then
-			-- nil value means entry was deleted
-			state.tasks:delete(todo_uid)
-			return
-		end
-		local todo_ical = vim.fn.json_decode(value)
-		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
-
+	for todo_uid, todo_ical in pairs(uid_to_icals) do
 		---@type ical.vtodo_t
 		local vtodo = ic.vtodo_from_ical(todo_ical)
 
@@ -179,12 +203,7 @@ function M.read_buffer(state)
 		}
 
 		state.tasks:add(todo_uid, todo)
-	end)
-	lds.init_done(state.conn)
-
-	-- read all current data
-	lds.init_stored_entries(state.conn)
-	lds.execute_all_stored_entries_for_path_prefix(state.conn, { "resources" })
+	end
 
 	state.lines = {}
 	for _, task in ipairs(state.tasks:to_list()) do
@@ -197,8 +216,13 @@ function M.read_buffer(state)
 	vim.api.nvim_buf_set_option(state.main_buf_nr, "modified", false)
 end
 
+---@class decscribe.WriteBufferParams
+---@field db_update_ical fun(uid: ical.uid_t, ical: ical.ical_t)
+---@field db_delete_ical fun(uid: ical.uid_t)
+
 ---@param state decscribe.State
-function M.write_buffer(state)
+---@param params decscribe.WriteBufferParams
+function M.write_buffer(state, params)
 	local main_buf_nr = state.main_buf_nr
 
 	if main_buf_nr == nil then return end
@@ -259,7 +283,7 @@ function M.write_buffer(state)
 			assert(count > 0, "decscribe: diff count in this hunk cannot be 0")
 			for idx = start, start + count - 1 do
 				local new_line = new_contents[idx]
-				on_line_changed(state, idx, new_line)
+				on_line_changed(state, idx, new_line, params)
 			end
 		-- different scenario
 		else
@@ -273,9 +297,9 @@ function M.write_buffer(state)
 	for _, change in ipairs(lines_to_affect) do
 		local idx = change.idx
 		if change.line == nil then
-			on_line_removed(state, idx)
+			on_line_removed(state, idx, params)
 		else
-			on_line_added(state, idx, change.line)
+			on_line_added(state, idx, change.line, params)
 		end
 	end
 

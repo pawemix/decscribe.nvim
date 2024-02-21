@@ -1,5 +1,3 @@
-local ic = require("decscribe.ical")
-
 local ffi = nil
 local lds = nil
 
@@ -305,50 +303,6 @@ function M.set_entry(connection, path, key, value)
 	end
 
 	lds.decsync_so_set_entry(connection[0], path_arr, #path, key or "", value)
-end
-
----@param connection Connection
----@param todo tasks.Task
-function M.update_todo(connection, todo)
-	local uid = todo.uid
-	local ical = todo.ical
-	local vtodo = todo.vtodo
-	local path = { "resources", uid }
-
-	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
-
-	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
-	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
-
-	local summary = vtodo.summary
-	if summary then
-		ical = ic.upsert_ical_prop(ical, "SUMMARY", summary)
-	end
-
-	local categories = vtodo.categories
-	if categories then
-		local new_cats = { unpack(categories) }
-		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
-		-- categories alphabetically:
-		table.sort(new_cats)
-		local new_cats_str = table.concat(new_cats, ",")
-		ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
-	end
-
-	local priority = vtodo.priority
-	if priority then
-		ical = ic.upsert_ical_prop(ical, "PRIORITY", tostring(priority))
-	end
-
-	local parent_uid = vtodo.parent_uid
-	if parent_uid then
-		ical = ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", parent_uid)
-	end
-
-	local ical_json = vim.fn.json_encode(ical)
-
-	---@diagnostic disable-next-line: param-type-mismatch
-	M.set_entry(connection, path, nil, ical_json)
 end
 
 return M

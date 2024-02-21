@@ -64,6 +64,42 @@ local function list_collections(ds_dir)
 	return coll_name_to_ids
 end
 
+local function lds_retrieve_icals()
+	state.conn =
+		lds.connect(state.decsync_dir, "tasks", state.curr_coll_id, lds.get_app_id(APP_NAME))
+	local uid_to_ical = {}
+	lds.add_listener(state.conn, { "resources" }, function(path, _, _, value)
+		assert(#path == 1, "Unexpected path length while reading updated entry")
+		---@type ical.uid_t
+		---@diagnostic disable-next-line: assign-type-mismatch
+		local todo_uid = path[1]
+		if value == "null" then
+			-- nil value means entry was deleted
+			uid_to_ical[todo_uid] = nil
+			return
+		end
+		local todo_ical = vim.fn.json_decode(value)
+		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
+		uid_to_ical[todo_uid] = todo_ical
+	end)
+	lds.init_done(state.conn)
+
+	-- read all current data
+	lds.init_stored_entries(state.conn)
+	lds.execute_all_stored_entries_for_path_prefix(state.conn, { "resources" })
+
+	return uid_to_ical
+end
+
+local function lds_update_ical(uid, ical)
+	local ical_json = vim.fn.json_encode(ical)
+	lds.set_entry(state.conn, { "resources", uid }, nil, ical_json)
+end
+
+local function lds_delete_ical(uid)
+	lds.set_entry(state.conn, { "resources", uid }, nil, nil)
+end
+
 function M.setup()
 	-- set up autocmds for reading/writing the buffer:
 	local augroup = vim.api.nvim_create_augroup("Decscribe", { clear = true })
@@ -72,7 +108,9 @@ function M.setup()
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			app.read_buffer(state)
+			app.read_buffer(state, {
+				db_retrieve_icals = lds_retrieve_icals,
+			})
 		end,
 	})
 
@@ -80,7 +118,10 @@ function M.setup()
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			app.write_buffer(state)
+			app.write_buffer(state, {
+				db_delete_ical = lds_delete_ical,
+				db_update_ical = lds_update_ical,
+			})
 		end,
 	})
 
@@ -89,6 +130,9 @@ function M.setup()
 			decsync_dir = params.fargs[1],
 			collection_label = params.fargs[2],
 			list_collections_fn = list_collections,
+			read_buffer_params = {
+				db_retrieve_icals = lds_retrieve_icals,
+			}
 		})
 	end, {
 		nargs = "+",
