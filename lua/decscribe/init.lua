@@ -24,9 +24,11 @@ local state = {
 	tasks = ts.Tasks:new(),
 	lines = {},
 	curr_coll_id = nil,
-	conn = nil,
 	decsync_dir = nil,
 }
+
+---@type Connection
+local conn = nil
 
 -- Functions
 ------------
@@ -65,10 +67,10 @@ local function list_collections(ds_dir)
 end
 
 local function lds_retrieve_icals()
-	state.conn =
+	conn =
 		lds.connect(state.decsync_dir, "tasks", state.curr_coll_id, lds.get_app_id(APP_NAME))
 	local uid_to_ical = {}
-	lds.add_listener(state.conn, { "resources" }, function(path, _, _, value)
+	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
 		---@type ical.uid_t
 		---@diagnostic disable-next-line: assign-type-mismatch
@@ -82,22 +84,22 @@ local function lds_retrieve_icals()
 		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
 		uid_to_ical[todo_uid] = todo_ical
 	end)
-	lds.init_done(state.conn)
+	lds.init_done(conn)
 
 	-- read all current data
-	lds.init_stored_entries(state.conn)
-	lds.execute_all_stored_entries_for_path_prefix(state.conn, { "resources" })
+	lds.init_stored_entries(conn)
+	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
 
 	return uid_to_ical
 end
 
 local function lds_update_ical(uid, ical)
 	local ical_json = vim.fn.json_encode(ical)
-	lds.set_entry(state.conn, { "resources", uid }, nil, ical_json)
+	lds.set_entry(conn, { "resources", uid }, nil, ical_json)
 end
 
 local function lds_delete_ical(uid)
-	lds.set_entry(state.conn, { "resources", uid }, nil, nil)
+	lds.set_entry(conn, { "resources", uid }, nil, nil)
 end
 
 function M.setup()
