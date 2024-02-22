@@ -199,3 +199,31 @@ describe("ical_parse", function()
 		eq(expected, ic.ical_parse(ical))
 	end)
 end)
+
+describe("ical_show", function()
+	it("show a sample Ical correctly", function()
+		local input = {
+			{ key = "BEGIN", value = "CALENDAR" },
+			{ key = "BEGIN", value = "VTODO" },
+			{ key = "PRIORITY", value = "1" },
+			{ key = "STATUS", value = "COMPLETED" },
+			{ key = "SUMMARY", value = "something" },
+			{ key = "X-OC-HIDESUBTASKS", value = "1" },
+			{ key = "DUE", value = "20240612", opts = { VALUE = "DATE" } },
+			{ key = "END", value = "VTODO" },
+			{ key = "END", value = "CALENDAR" },
+		}
+		local expected = table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"PRIORITY:1",
+			"STATUS:COMPLETED",
+			"SUMMARY:something",
+			"X-OC-HIDESUBTASKS:1",
+			"DUE;VALUE=DATE:20240612",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n"
+		eq(expected, ic.ical_show(input))
+	end)
+end)
