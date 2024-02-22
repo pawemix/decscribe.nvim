@@ -3,8 +3,12 @@ local ts = require("decscribe.tasks")
 
 local M = {}
 
+---@class (exact) decscribe.UiFacade
+---@field buf_get_lines fun(start: integer, end_: integer): string[]
+---@field buf_set_lines fun(start: integer, end_: integer, lines: string[])
+---@field buf_set_opt fun(opt_name: string, value: any)
+
 ---@class (exact) decscribe.State
----@field conn Connection?
 ---@field main_buf_nr integer?
 ---@field tasks tasks.Tasks
 ---@field lines string[]
@@ -175,6 +179,7 @@ end
 
 ---@class (exact) decscribe.ReadBufferParams
 ---@field db_retrieve_icals fun(): table<ical.uid_t, ical.ical_t>
+---@field ui decscribe.UiFacade
 
 ---@param state decscribe.State
 ---@param params decscribe.ReadBufferParams
@@ -212,13 +217,14 @@ function M.read_buffer(state, params)
 	end
 
 	-- initially fill the buffer with initial data:
-	vim.api.nvim_buf_set_lines(0, 0, -1, false, state.lines)
-	vim.api.nvim_buf_set_option(state.main_buf_nr, "modified", false)
+	params.ui.buf_set_lines(0, -1, state.lines)
+	params.ui.buf_set_opt("modified", false)
 end
 
 ---@class decscribe.WriteBufferParams
 ---@field db_update_ical fun(uid: ical.uid_t, ical: ical.ical_t)
 ---@field db_delete_ical fun(uid: ical.uid_t)
+---@field ui decscribe.UiFacade
 
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
@@ -229,7 +235,7 @@ function M.write_buffer(state, params)
 	assert(main_buf_nr ~= nil)
 
 	local old_contents = state.lines
-	local new_contents = vim.api.nvim_buf_get_lines(main_buf_nr, 0, -1, false)
+	local new_contents = params.ui.buf_get_lines(0, -1)
 	local hunks = vim.diff(
 		table.concat(old_contents, "\n"),
 		table.concat(new_contents, "\n"),
@@ -305,7 +311,7 @@ function M.write_buffer(state, params)
 
 	-- updating succeeded
 	state.lines = new_contents
-	vim.api.nvim_buf_set_option(main_buf_nr, "modified", false)
+	params.ui.buf_set_opt("modified", false)
 end
 
 ---@alias decscribe.CollLabel string
