@@ -102,6 +102,21 @@ local function lds_delete_ical(uid)
 	lds.set_entry(conn, { "resources", uid }, nil, nil)
 end
 
+local function nvim_buf_set_opt(opt_name, value)
+	vim.api.nvim_buf_set_option(state.main_buf_nr, opt_name, value)
+end
+
+local function nvim_buf_get_lines(start, end_)
+	local bufnr = state.main_buf_nr
+	assert(bufnr)
+	return vim.api.nvim_buf_get_lines(bufnr, start, end_, true)
+end
+local function nvim_buf_set_lines(start, end_, lines)
+	local bufnr = state.main_buf_nr
+	assert(bufnr)
+	vim.api.nvim_buf_set_lines(bufnr, start, end_, false, lines)
+end
+
 function M.setup()
 	-- set up autocmds for reading/writing the buffer:
 	local augroup = vim.api.nvim_create_augroup("Decscribe", { clear = true })
@@ -112,6 +127,11 @@ function M.setup()
 		callback = function()
 			app.read_buffer(state, {
 				db_retrieve_icals = lds_retrieve_icals,
+				ui = {
+					buf_set_lines = nvim_buf_set_lines,
+					buf_get_lines = nvim_buf_get_lines,
+					buf_set_opt = nvim_buf_set_opt,
+				},
 			})
 		end,
 	})
@@ -123,6 +143,11 @@ function M.setup()
 			app.write_buffer(state, {
 				db_delete_ical = lds_delete_ical,
 				db_update_ical = lds_update_ical,
+				ui = {
+					buf_set_lines = nvim_buf_set_lines,
+					buf_get_lines = nvim_buf_get_lines,
+					buf_set_opt = nvim_buf_set_opt,
+				},
 			})
 		end,
 	})
@@ -134,6 +159,11 @@ function M.setup()
 			list_collections_fn = list_collections,
 			read_buffer_params = {
 				db_retrieve_icals = lds_retrieve_icals,
+				ui = {
+					buf_set_lines = nvim_buf_set_lines,
+					buf_get_lines = nvim_buf_get_lines,
+					buf_set_opt = nvim_buf_set_opt,
+				},
 			}
 		})
 	end, {
