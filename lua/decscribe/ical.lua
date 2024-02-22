@@ -369,4 +369,19 @@ function M.ical_parse(ical)
 	return out
 end
 
+---show an Ical structure as an ordinary Ical string for external use
+---@param ical decscribe.ical.Ical
+---@return string
+function M.ical_show(ical)
+	local lines = {}
+	for _, entry in ipairs(ical) do
+		local header = { entry.key }
+		for opt_key, opt_value in pairs(entry.opts or {}) do
+			table.insert(header, opt_key .. "=" .. opt_value)
+		end
+		table.insert(lines, table.concat(header, ";") .. ":" .. entry.value)
+	end
+	return table.concat(lines, "\r\n") .. "\r\n"
+end
+
 return M
