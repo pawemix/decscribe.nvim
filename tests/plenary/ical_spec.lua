@@ -147,3 +147,55 @@ describe("parse_md_line", function()
 		end)
 	end
 end)
+
+describe("ical_parse", function()
+	it("parses sample ICal correctly", function()
+		local ical = table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"PRIORITY:1",
+			"STATUS:COMPLETED",
+			"SUMMARY:something",
+			"X-OC-HIDESUBTASKS:1",
+			"DUE;VALUE=DATE:20240612",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n"
+		local expected = {
+			{ key = "BEGIN", value = "CALENDAR" },
+			{ key = "BEGIN", value = "VTODO" },
+			{ key = "PRIORITY", value = "1" },
+			{ key = "STATUS", value = "COMPLETED" },
+			{ key = "SUMMARY", value = "something" },
+			{ key = "X-OC-HIDESUBTASKS", value = "1" },
+			{ key = "DUE", value = "20240612", opts = { VALUE = "DATE" } },
+			{ key = "END", value = "VTODO" },
+			{ key = "END", value = "CALENDAR" },
+		}
+		eq(expected, ic.ical_parse(ical))
+	end)
+
+	it("parses Ical with a multiline value", function()
+		local ical = table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:COMPLETED",
+			"SUMMARY:something",
+			"DESCRIPTION:this",
+			"is a multiline",
+			"description",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n"
+		local expected = {
+			{ key = "BEGIN", value = "CALENDAR" },
+			{ key = "BEGIN", value = "VTODO" },
+			{ key = "STATUS", value = "COMPLETED" },
+			{ key = "SUMMARY", value = "something" },
+			{ key = "DESCRIPTION", value = "this\r\nis a multiline\r\ndescription" },
+			{ key = "END", value = "VTODO" },
+			{ key = "END", value = "CALENDAR" },
+		}
+		eq(expected, ic.ical_parse(ical))
+	end)
+end)
