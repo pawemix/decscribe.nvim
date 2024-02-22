@@ -184,11 +184,6 @@ end
 ---@param state decscribe.State
 ---@param params decscribe.ReadBufferParams
 function M.read_buffer(state, params)
-	if state.main_buf_nr == nil then return end
-	assert(state.main_buf_nr ~= nil)
-	assert(state.curr_coll_id)
-	assert(state.decsync_dir)
-
 	-- tasklist has to be recreated from scratch, so that there are no leftovers,
 	-- e.g. from a different collection/dsdir
 	state.tasks = ts.Tasks:new()
