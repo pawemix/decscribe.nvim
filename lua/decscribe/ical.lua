@@ -13,6 +13,14 @@ local M = {}
 ---@field parent_uid ical.uid_t?
 local vtodo_t = {}
 
+---@alias decscribe.ical.Ical decscribe.ical.IcalEntry[]
+---@alias decscribe.ical.IcalOptions table<string, string>
+
+---@class decscribe.ical.IcalEntry
+---@field key string
+---@field value string
+---@field opts? decscribe.ical.IcalOptions
+
 local ICAL_PROP_NAMES = {
 	-- TODO: insert BEGIN:VCALENDAR
 	"VERSION",
@@ -288,31 +296,77 @@ end
 ---@param ical ical.ical_t
 ---@return ical.vtodo_t
 function M.vtodo_from_ical(ical)
-	local categories = vim.split(
-		M.find_ical_prop(ical, "CATEGORIES") or "",
-		",",
-		{ trimempty = true }
-	)
-	-- NOTE: there is a convention (or at least tasks.org follows it) to sort
-	-- categories alphabetically:
-	table.sort(categories)
+	local entries = M.ical_parse(ical)
 
-	local priority = M.priority_t.undefined
-	local priority_str = M.find_ical_prop(ical, "PRIORITY")
-	if priority_str and tonumber(priority_str) then
-		priority = tonumber(priority_str) or M.priority_t.undefined
+	local vtodo_proto = {}
+	for _, entry in ipairs(entries) do
+		if entry.key == "CATEGORIES" then
+			vtodo_proto.categories = vim.split(entry.value, ",", { trimempty = true })
+			-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+			-- categories alphabetically:
+			table.sort(vtodo_proto.categories)
+			if #vtodo_proto.categories == 0 then vtodo_proto.categories = nil end
+		elseif entry.key == "PRIORITY" then
+			vtodo_proto.priority = tonumber(entry.value) or M.priority_t.undefined
+		elseif entry.key == "STATUS" then
+			vtodo_proto.completed = entry.value == "COMPLETED"
+		elseif entry.key == "SUMMARY" then
+			vtodo_proto.summary = entry.value
+		elseif entry.key == "DESCRIPTION" then
+			vtodo_proto.description = entry.value
+		elseif entry.key == "RELATED-TO" and entry.opts["RELTYPE"] == "PARENT" then
+			vtodo_proto.parent_uid = entry.value
+		end
 	end
 
 	---@type ical.vtodo_t
 	local vtodo = {
-		completed = M.find_ical_prop(ical, "STATUS") == "COMPLETED",
-		priority = priority,
-		summary = M.find_ical_prop(ical, "SUMMARY") or "",
-		categories = categories,
-		description = M.find_ical_prop(ical, "DESCRIPTION") or "",
-		parent_uid = M.find_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT"),
+		completed = vtodo_proto.completed,
+		priority = vtodo_proto.priority,
+		summary = vtodo_proto.summary,
+		categories = vtodo_proto.categories,
+		description = vtodo_proto.description,
+		parent_uid = vtodo_proto.parent_uid,
 	}
 	return vtodo
+end
+
+---parse an ICal string into a structured list of its properties
+---@param ical string
+---@return decscribe.ical.Ical
+function M.ical_parse(ical)
+	-- cut out the trailing newline
+	if vim.endswith(ical, "\r\n") then ical = string.sub(ical, 1, #ical - 2) end
+
+	---@type decscribe.ical.Ical
+	local out = {}
+	for _, line in
+		ipairs(vim.split(ical, "\r\n", { plain = true, trimempty = true }))
+	do
+		local colon_pos = string.find(line, ":", 1, true)
+		if not colon_pos then
+			-- append the line to the last added entry's value:
+			local last_entry = out[#out]
+			assert(last_entry, "Ical starts with free text")
+			last_entry.value = last_entry.value .. "\r\n" .. line
+		else
+			local entry = {}
+			entry.value = string.sub(line, colon_pos + 1)
+			local header = string.sub(line, 1, colon_pos - 1)
+			local header_comps = vim.split(header, ";", { plain = true })
+			assert(#header_comps > 0, "empty Ical property header")
+			entry.key = table.remove(header_comps, 1)
+			if #header_comps > 0 then entry.opts = {} end
+			for _, opt_entry in ipairs(header_comps) do
+				local opt_entry_comps = vim.split(opt_entry, "=", { plain = true })
+				local opt_key = opt_entry_comps[1]
+				local opt_value = opt_entry_comps[2]
+				if opt_key and opt_value then entry.opts[opt_key] = opt_value end
+			end
+			table.insert(out, entry)
+		end
+	end
+	return out
 end
 
 return M
