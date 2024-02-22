@@ -273,7 +273,7 @@ function M.to_md_line(vtodo)
 		local prio_char = M.labelled_priorities[vtodo.priority] or vtodo.priority
 		line = line .. " !" .. prio_char
 	end
-	if #vtodo.categories > 0 then
+	if vtodo.categories and #vtodo.categories > 0 then
 		local function in_colons(s) return ":" .. s .. ":" end
 		local categories_str =
 			table.concat(vim.tbl_map(in_colons, vtodo.categories), " ")
