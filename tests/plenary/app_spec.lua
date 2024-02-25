@@ -122,10 +122,6 @@ describe("write_buffer", function()
 			"BEGIN:VTODO",
 			"PRIORITY:1",
 			"STATUS:NEEDS-ACTION",
-			-- NOTE: we cannot simply stop updating categories if they're empty,
-			-- because then we need to handle case nonempty categories -> no
-			-- categories => remove CATEGORIES prop:
-			"CATEGORIES:",
 			"SUMMARY:something",
 			"DUE;VALUE=DATE:20240412",
 			"END:VTODO",
@@ -175,10 +171,6 @@ describe("write_buffer", function()
 			"PRIORITY:1",
 			"DUE;VALUE=DATE:20240418",
 			"STATUS:NEEDS-ACTION",
-			-- NOTE: we cannot simply stop updating categories if they're empty,
-			-- because then we need to handle case nonempty categories -> no
-			-- categories => remove CATEGORIES prop:
-			"CATEGORIES:",
 			"SUMMARY:something",
 			"END:VTODO",
 			"END:CALENDAR",
@@ -226,10 +218,51 @@ describe("write_buffer", function()
 			"BEGIN:VTODO",
 			"PRIORITY:1",
 			"STATUS:NEEDS-ACTION",
-			-- NOTE: we cannot simply stop updating categories if they're empty,
-			-- because then we need to handle case nonempty categories -> no
-			-- categories => remove CATEGORIES prop:
-			"CATEGORIES:",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n", updated_ical)
+	end)
+
+	it("writes a task with category removal", function()
+		-- given
+		---@type decscribe.State
+		local state = {
+			lines = { "- [ ] :first: :second: something" },
+			tasks = ts.Tasks:new(),
+		}
+		state.tasks:add("1234", {
+			uid = "1234",
+			ical = table.concat({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"CATEGORIES:first,second",
+				"END:VTODO",
+				"END:CALENDAR",
+			}, "\r\n") .. "\r\n",
+			vtodo = {
+				summary = "something",
+				completed = false,
+				priority = ic.priority_t.tasks_org_high,
+			},
+		})
+		-- when
+		local updated_ical = nil
+		app.write_buffer(state, {
+			ui = {
+				buf_set_lines = function() end,
+				buf_get_lines = function() return { "- [ ] something" } end,
+				buf_set_opt = function() end,
+			},
+			db_delete_ical = function() end,
+			db_update_ical = function(_, ical) updated_ical = ical end,
+		})
+		eq(table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
 			"SUMMARY:something",
 			"END:VTODO",
 			"END:CALENDAR",
