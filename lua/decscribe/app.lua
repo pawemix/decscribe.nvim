@@ -76,79 +76,109 @@ local function on_line_changed(state, idx, new_line, params)
 
 	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
 
-	---@type string?
-	local due_date_str = nil
-	if
-		vtodo.due
-		and vtodo.due.timestamp
-		and vtodo.due.precision == ic.DatePrecision.Date
-	then
-		local due_date_str_ = os.date("%Y%m%d", vtodo.due.timestamp)
-		---@cast due_date_str_ string
-		due_date_str = due_date_str_
-	end
-
-	local ical_entries = ic.ical_parse(ical)
-	---@type integer[]
-	local entries_to_remove = {}
-	local vtodo_end_idx = nil
-	local found_due = false
-	for i, entry in ipairs(ical_entries) do
-		if entry.key == "DUE" and entry.opts["VALUE"] == "DATE" then
-			found_due = true
-			if due_date_str ~= nil then
-				entry.value = due_date_str
-			else
-				-- remove the entry
-				table.insert(entries_to_remove, i)
-			end
-		elseif entry.key == "END" and entry.value == "VTODO" then
-			vtodo_end_idx = i
-		end
-	end
-	if due_date_str and not found_due then
-		assert(vtodo_end_idx, "END:VTODO ical prop required but not found")
-		---@type decscribe.ical.IcalEntry
-		local due_entry = {
-			key = "DUE",
-			opts = { VALUE = "DATE" },
-			value = due_date_str,
-		}
-		table.insert(ical_entries, vtodo_end_idx, due_entry)
-	end
-	for i = #entries_to_remove, 1, -1 do
-		local idx_to_remove = entries_to_remove[i]
-		table.remove(ical_entries, idx_to_remove)
-	end
-	ical = ic.ical_show(ical_entries)
+	---@type table<string, string|false|{ opts: decscribe.ical.IcalOptions, value: string}>
+	---a dict on what fields to change; if value is a string, the field should be
+	---updated to that; if it's `false`, the field should be removed if present
+	local changes = {}
 
 	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
-	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
+	changes["STATUS"] = new_status
 
-	local summary = vtodo.summary
-	if summary then ical = ic.upsert_ical_prop(ical, "SUMMARY", summary) end
+	---@type string|false
+	local summary = vtodo.summary or false
+	if summary == "" then summary = false end
+	changes["SUMMARY"] = summary
 
 	local categories = vtodo.categories
-	if categories then
+	if not categories or #categories == 0 then
+		changes["CATEGORIES"] = false
+	else
 		local new_cats = { unpack(categories) }
 		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
 		-- categories alphabetically:
 		table.sort(new_cats)
 		local new_cats_str = table.concat(new_cats, ",")
-		ical = ic.upsert_ical_prop(ical, "CATEGORIES", new_cats_str)
+		changes["CATEGORIES"] = new_cats_str
 	end
 
 	local priority = vtodo.priority
-	if priority then
-		ical = ic.upsert_ical_prop(ical, "PRIORITY", tostring(priority))
+	if not priority or priority == ic.priority_t.undefined then
+		changes["PRIORITY"] = false
+	else
+		changes["PRIORITY"] = tostring(priority)
 	end
 
 	local parent_uid = vtodo.parent_uid
 	if parent_uid then
-		ical = ic.upsert_ical_prop(ical, "RELATED-TO;RELTYPE=PARENT", parent_uid)
+		changes["RELATED-TO"] =
+			{ value = parent_uid, opts = { RELTYPE = "PARENT" } }
 	end
 
-	params.db_update_ical(uid, ical)
+	local due = vtodo.due
+	if not due then
+		changes["DUE"] = false
+	elseif due.precision == ic.DatePrecision.Date then
+		local due_date_str = os.date("%Y%m%d", vtodo.due.timestamp)
+		---@cast due_date_str string
+		changes["DUE"] = { value = due_date_str, opts = { VALUE = "DATE" } }
+	else
+		error("Unhandled state of DUE property")
+	end
+
+	local ical_entries = ic.ical_parse(ical)
+
+	-- remove all entries marked for deletion:
+	for i = #ical_entries, 1, -1 do
+		local key = ical_entries[i].key
+		if changes[key] == false then
+			changes[key] = nil
+			table.remove(ical_entries, i)
+		end
+	end
+	-- discard all deletion changes that weren't applied due to the entry not
+	-- being there at all:
+	for key, value in pairs(changes) do
+		if value == false then changes[key] = nil end
+	end
+
+	-- update all existing entries:
+	for _, entry in ipairs(ical_entries) do
+		local change = changes[entry.key]
+		if change ~= nil then
+			if type(change) == "string" then
+				entry.value = change
+			elseif type(change) == "table" then
+				entry.value = change.value
+				entry.opts = change.opts -- TODO: overwrite or merge?
+			else
+				error("unexpected type of change: " .. vim.inspect(change))
+			end
+			changes[entry.key] = nil
+		end
+	end
+
+	-- insert new entries right before "END:VTODO"
+	for i, entry in ipairs(ical_entries) do
+		if entry.key == "END" and entry.value == "VTODO" then
+			for key, change in pairs(changes) do
+				---@type decscribe.ical.IcalEntry?
+				local new_entry = nil
+				if type(change) == "string" then
+					new_entry = { key = key, value = change }
+				elseif type(change) == "table" then
+					new_entry = { key = key, value = change.value, opts = change.opts }
+				else
+					error("unexpected type of change: " .. vim.inspect(change))
+				end
+				table.insert(ical_entries, i, new_entry)
+
+			end
+			break
+		end
+	end
+	assert(#changes == 0, "some changes were unexpectedly not applied")
+
+	params.db_update_ical(uid, ic.ical_show(ical_entries))
 end
 
 ---@class (exact) decscribe.OpenBufferParams
