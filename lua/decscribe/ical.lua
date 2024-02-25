@@ -4,6 +4,18 @@ local M = {}
 
 ---@alias ical.ical_t string
 
+---@enum ical.DatePrecision
+M.DatePrecision = {
+	Date = "DATE",
+	DateTime = "DATETIME",
+}
+
+---@alias ical.Timestamp integer seconds since the epoch, as returned by os.time
+
+---@class (exact) ical.Date
+---@field timestamp ical.Timestamp
+---@field precision ical.DatePrecision
+
 ---@class (exact) ical.vtodo_t
 ---@field summary string?
 ---@field description string?
@@ -11,6 +23,7 @@ local M = {}
 ---@field priority number?
 ---@field categories string[]?
 ---@field parent_uid ical.uid_t?
+---@field due ical.Date?
 local vtodo_t = {}
 
 ---@alias decscribe.ical.Ical decscribe.ical.IcalEntry[]
@@ -38,6 +51,7 @@ local ICAL_PROP_NAMES = {
 	"RELATED-TO",
 	"X-APPLE-SORT-ORDER",
 	"DUE",
+	"DTSTART",
 	"COMPLETED",
 	"PERCENT-COMPLETE",
 	"END", -- TODO: replace END:VTODO
@@ -243,6 +257,16 @@ function M.parse_md_line(line)
 
 	line = line:sub(#checkbox_heading + 1)
 
+	---@type ical.Date?
+	local due = nil
+	local _, due_date_end, year, month, day =
+		line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)%s*")
+	if due_date_end then
+		line = line:sub(due_date_end + 1)
+		local timestamp = os.time({ year = year, month = month, day = day })
+		due = { timestamp = timestamp, precision = M.DatePrecision.Date }
+	end
+
 	local priority = nil
 	local _, prio_end, prio = line:find("^!([0-9HML])%s*")
 	if tonumber(prio) then
@@ -268,6 +292,7 @@ function M.parse_md_line(line)
 		priority = priority or M.priority_t.undefined,
 		categories = categories,
 		description = nil,
+		due = due,
 	}
 
 	return vtodo
@@ -277,6 +302,11 @@ end
 ---@return string md_line a markdown line representing the todo entry
 function M.to_md_line(vtodo)
 	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
+
+	if vtodo.due and vtodo.due.precision == M.DatePrecision.Date then
+		line = line .. " " .. os.date("%Y-%m-%d", vtodo.due.timestamp)
+	end
+
 	if vtodo.priority and vtodo.priority ~= M.priority_t.undefined then
 		local prio_char = M.labelled_priorities[vtodo.priority] or vtodo.priority
 		line = line .. " !" .. prio_char
@@ -316,6 +346,15 @@ function M.vtodo_from_ical(ical)
 			vtodo_proto.description = entry.value
 		elseif entry.key == "RELATED-TO" and entry.opts["RELTYPE"] == "PARENT" then
 			vtodo_proto.parent_uid = entry.value
+		elseif entry.key == "DUE" and entry.opts["VALUE"] == "DATE" then
+			local due_str = entry.value
+			local _, _, year, month, day =
+				string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
+			if year and month and day then
+				local due_timestamp = os.time({ year = year, month = month, day = day })
+				vtodo_proto.due =
+					{ timestamp = due_timestamp, precision = M.DatePrecision.Date }
+			end
 		end
 	end
 
@@ -327,6 +366,7 @@ function M.vtodo_from_ical(ical)
 		categories = vtodo_proto.categories,
 		description = vtodo_proto.description,
 		parent_uid = vtodo_proto.parent_uid,
+		due = vtodo_proto.due,
 	}
 	return vtodo
 end
