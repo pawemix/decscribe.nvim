@@ -66,9 +66,7 @@ local function on_line_changed(state, idx, new_line, params)
 	local new_vtodo = ic.parse_md_line(new_line)
 	assert(new_vtodo)
 
-	if vim.deep_equal(changed_todo.vtodo, new_vtodo) then
-		return
-	end
+	if vim.deep_equal(changed_todo.vtodo, new_vtodo) then return end
 
 	changed_todo.vtodo = vim.tbl_extend("force", changed_todo.vtodo, new_vtodo)
 	state.tasks:update_at(idx, changed_todo.vtodo)
@@ -82,9 +80,7 @@ local function on_line_changed(state, idx, new_line, params)
 	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
 
 	local summary = vtodo.summary
-	if summary then
-		ical = ic.upsert_ical_prop(ical, "SUMMARY", summary)
-	end
+	if summary then ical = ic.upsert_ical_prop(ical, "SUMMARY", summary) end
 
 	local categories = vtodo.categories
 	if categories then
@@ -265,10 +261,7 @@ function M.write_buffer(state, params)
 			start = new_start
 			count = new_count
 			for idx = start, start + count - 1 do
-				table.insert(
-					lines_to_affect,
-					{ idx = idx, line = new_contents[idx] }
-				)
+				table.insert(lines_to_affect, { idx = idx, line = new_contents[idx] })
 			end
 		-- something was removed:
 		elseif old_count > 0 and new_count == 0 then
