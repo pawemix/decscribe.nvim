@@ -220,11 +220,6 @@ end
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
 function M.write_buffer(state, params)
-	local main_buf_nr = state.main_buf_nr
-
-	if main_buf_nr == nil then return end
-	assert(main_buf_nr ~= nil)
-
 	local old_contents = state.lines
 	local new_contents = params.ui.buf_get_lines(0, -1)
 	local hunks = vim.diff(
