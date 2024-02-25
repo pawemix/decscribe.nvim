@@ -29,7 +29,13 @@
 - [x] Tasks.org compliance?: sort categories alphabetically
 - [x] priority as a number
 - [x] priority as a letter
-- [ ] start & due dates
+- [x] due dates
+- [ ] refactor ical struct to a map with a default sorting, instead of a list
+- [ ] ical: if CATEGORIES are empty, remove the Ical entry altogether
+- [ ] ical: if any generic Ical field is empty,
+- [ ] refactor app.lua's functions to impureim sandwiches, for easier testing
+- [ ] due datetimes
+- [ ] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [ ] subtasks
 - [ ] handle complex hunks (mix of changes and removals/additions)
 - [ ] built-in <c-a>/<c-i> override to cycle through `[HML]` priorities
