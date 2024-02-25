@@ -146,6 +146,30 @@ describe("parse_md_line", function()
 			ieq(expected, ic.parse_md_line(line) or {})
 		end)
 	end
+
+	-- These:
+	-- DUE;VALUE=DATE:20201213
+	-- DUE;TZID=Europe/Warsaw:20210607T160001
+	it("recognizes due date", function()
+		local line = "- [ ] 2024-06-15 something with a deadline"
+		local expected_ts = os.time({
+			year = 2024,
+			month = 6,
+			day = 15,
+		})
+		---@type ical.vtodo_t
+		local expected = {
+			completed = false,
+			due = { timestamp = expected_ts, precision = ic.DatePrecision.Date },
+			summary = "something with a deadline",
+		}
+		ieq(expected, ic.parse_md_line(line) or {})
+	end)
+
+	-- it("recognizes end datetime")
+	-- it("does not recognize end date which is out of bounds ")
+	-- it("does not recognize start date which is out of bounds")
+	-- it("recognizes start datetime")
 end)
 
 describe("ical_parse", function()
