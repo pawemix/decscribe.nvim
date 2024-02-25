@@ -76,6 +76,52 @@ local function on_line_changed(state, idx, new_line, params)
 
 	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
 
+	---@type string?
+	local due_date_str = nil
+	if
+		vtodo.due
+		and vtodo.due.timestamp
+		and vtodo.due.precision == ic.DatePrecision.Date
+	then
+		local due_date_str_ = os.date("%Y%m%d", vtodo.due.timestamp)
+		---@cast due_date_str_ string
+		due_date_str = due_date_str_
+	end
+
+	local ical_entries = ic.ical_parse(ical)
+	---@type integer[]
+	local entries_to_remove = {}
+	local vtodo_end_idx = nil
+	local found_due = false
+	for i, entry in ipairs(ical_entries) do
+		if entry.key == "DUE" and entry.opts["VALUE"] == "DATE" then
+			found_due = true
+			if due_date_str ~= nil then
+				entry.value = due_date_str
+			else
+				-- remove the entry
+				table.insert(entries_to_remove, i)
+			end
+		elseif entry.key == "END" and entry.value == "VTODO" then
+			vtodo_end_idx = i
+		end
+	end
+	if due_date_str and not found_due then
+		assert(vtodo_end_idx, "END:VTODO ical prop required but not found")
+		---@type decscribe.ical.IcalEntry
+		local due_entry = {
+			key = "DUE",
+			opts = { VALUE = "DATE" },
+			value = due_date_str,
+		}
+		table.insert(ical_entries, vtodo_end_idx, due_entry)
+	end
+	for i = #entries_to_remove, 1, -1 do
+		local idx_to_remove = entries_to_remove[i]
+		table.remove(ical_entries, idx_to_remove)
+	end
+	ical = ic.ical_show(ical_entries)
+
 	local new_status = vtodo.completed and "COMPLETED" or "NEEDS-ACTION"
 	ical = ic.upsert_ical_prop(ical, "STATUS", new_status)
 
