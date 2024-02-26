@@ -68,7 +68,11 @@ local function on_line_changed(state, idx, new_line, params)
 
 	if vim.deep_equal(changed_todo.vtodo, new_vtodo) then return end
 
-	changed_todo.vtodo = vim.tbl_extend("force", changed_todo.vtodo, new_vtodo)
+	-- XXX: any vtodo properties, that cannot be evaluated from line parsing, will
+	-- be lost, unless we explicitly assign them! e.g. parent vtodo uid:
+	new_vtodo.parent_uid = new_vtodo.parent_uid or changed_todo.vtodo.parent_uid
+	changed_todo.vtodo = new_vtodo
+
 	state.tasks:update_at(idx, changed_todo.vtodo)
 	local uid = changed_todo.uid
 	local ical = changed_todo.ical
