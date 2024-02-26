@@ -152,6 +152,10 @@ describe("write_buffer", function()
 				summary = "something",
 				completed = false,
 				priority = ic.priority_t.tasks_org_high,
+				due = {
+					precision = ic.DatePrecision.Date,
+					timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+				},
 			},
 		})
 		-- when
@@ -200,6 +204,10 @@ describe("write_buffer", function()
 				summary = "something",
 				completed = false,
 				priority = ic.priority_t.tasks_org_high,
+				due = {
+					precision = ic.DatePrecision.Date,
+					timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+				},
 			},
 		})
 		-- when
