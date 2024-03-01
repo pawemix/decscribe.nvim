@@ -151,7 +151,7 @@ function M.create_ical_vtodo(uid, vtodo)
 		"END:VTODO",
 		"END:VCALENDAR",
 	})
-	return table.concat(out, "\r\n")
+	return table.concat(out, "\r\n") .. "\r\n"
 end
 
 ---Returns nothing (`nil`) if there were no matches.
