@@ -35,12 +35,18 @@ end
 ---@param idx integer
 ---@param line string
 ---@param params decscribe.WriteBufferParams
+---@return ical.uid_t added_task_uid
+---@return ical.ical_t added_task_ical
 local function on_line_added(state, idx, line, params)
-	local uid = ic.generate_uid(state.tasks:uids())
+	params = params or {}
+	local uid = ic.generate_uid(state.tasks:uids(), params.seed)
 	local vtodo = ic.parse_md_line(line)
 	-- TODO: add a diagnostic to the line
 	assert(vtodo, "Invalid line while adding new entry")
-	local ical = ic.create_ical_vtodo(uid, vtodo)
+
+	local ical = ic.create_ical_vtodo(uid, vtodo, {
+		fresh_timestamp = params.fresh_timestamp,
+	})
 	---@type tasks.Task
 	local todo = {
 		uid = uid,
@@ -50,6 +56,7 @@ local function on_line_added(state, idx, line, params)
 	}
 	state.tasks:add_at(idx, todo)
 	if params.db_update_ical then params.db_update_ical(uid, ical) end
+	return uid, ical
 end
 
 ---@param state decscribe.State
@@ -298,14 +305,20 @@ end
 
 ---@class decscribe.WriteBufferParamsFP
 ---@field new_lines string[]
+---@field fresh_timestamp? integer
+---@field seed? integer used for random operations
 
 ---@class decscribe.WriteBufferParamsOP
 ---@field db_update_ical fun(uid: ical.uid_t, ical: ical.ical_t)
 ---@field db_delete_ical fun(uid: ical.uid_t)
 ---@field ui decscribe.UiFacade
 
+---@class decscribe.WriteBufferOutcome
+---@field to_create table<ical.uid_t, ical.ical_t>
+
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
+---@return decscribe.WriteBufferOutcome
 function M.write_buffer(state, params)
 	local old_contents = state.lines
 	local new_contents = params.new_lines or params.ui.buf_get_lines(0, -1)
@@ -370,12 +383,20 @@ function M.write_buffer(state, params)
 	-- removing/adding entries:
 	table.sort(lines_to_affect, function(a, b) return a.idx > b.idx end)
 	-- apply pending changes
+	---@type decscribe.WriteBufferOutcome
+	local out = { to_create = {} }
 	for _, change in ipairs(lines_to_affect) do
 		local idx = change.idx
 		if change.line == nil then
 			on_line_removed(state, idx, params)
 		else
-			on_line_added(state, idx, change.line, params)
+			local added_uid, added_ical =
+				on_line_added(state, idx, change.line, params)
+			assert(
+				not out.to_create[added_uid],
+				"when collecting new tasks to create, some have colliding UIDs"
+			)
+			out.to_create[added_uid] = added_ical
 		end
 	end
 
@@ -384,6 +405,8 @@ function M.write_buffer(state, params)
 	if (params.ui or {}).buf_set_opt then
 		params.ui.buf_set_opt("modified", false)
 	end
+
+	return out
 end
 
 ---@alias decscribe.CollLabel string
