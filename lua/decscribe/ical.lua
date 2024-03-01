@@ -101,11 +101,16 @@ function M.generate_uid(uids, seed)
 	end
 end
 
+---@class ical.CreateIcalVtodo.Params
+---@field fresh_timestamp? integer used for "created at" properties etc.
+
 ---@param uid ical.uid_t
 ---@param vtodo ical.vtodo_t
+---@param params? ical.CreateIcalVtodo.Params
 ---@return ical.ical_t
-function M.create_ical_vtodo(uid, vtodo)
-	local created_stamp = os.date("!%Y%m%dT%H%M%SZ")
+function M.create_ical_vtodo(uid, vtodo, params)
+	params = params or {}
+	local created_stamp = os.date("!%Y%m%dT%H%M%SZ", params.fresh_timestamp)
 
 	local priority = vtodo.priority or M.priority_t.undefined
 
