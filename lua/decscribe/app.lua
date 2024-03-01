@@ -49,7 +49,7 @@ local function on_line_added(state, idx, line, params)
 		ical = ical,
 	}
 	state.tasks:add_at(idx, todo)
-	params.db_update_ical(uid, ical)
+	if params.db_update_ical then params.db_update_ical(uid, ical) end
 end
 
 ---@param state decscribe.State
