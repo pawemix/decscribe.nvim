@@ -79,7 +79,7 @@ describe("read_buffer", function()
 end)
 
 describe("write_buffer", function()
-	it("writes a task with a due date insert", function()
+	it("updates a due date insert", function()
 		-- given
 		---@type decscribe.State
 		local state = {
@@ -129,7 +129,7 @@ describe("write_buffer", function()
 		}, "\r\n") .. "\r\n", updated_ical)
 	end)
 
-	it("writes a task with a due date update", function()
+	it("updates a due date update", function()
 		-- given
 		---@type decscribe.State
 		local state = {
@@ -181,7 +181,7 @@ describe("write_buffer", function()
 		}, "\r\n") .. "\r\n", updated_ical)
 	end)
 
-	it("writes a task with a due date removal", function()
+	it("updates a due date removal", function()
 		-- given
 		---@type decscribe.State
 		local state = {
@@ -232,7 +232,7 @@ describe("write_buffer", function()
 		}, "\r\n") .. "\r\n", updated_ical)
 	end)
 
-	it("writes a task with category removal", function()
+	it("updates a category removal", function()
 		-- given
 		---@type decscribe.State
 		local state = {
