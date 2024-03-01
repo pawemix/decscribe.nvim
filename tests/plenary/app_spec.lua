@@ -9,6 +9,10 @@ local it = it
 ---@diagnostic disable-next-line: undefined-field
 local eq = assert.are_same
 
+---@param lines string[]
+---@return ical.ical_t
+local function to_ical(lines) return table.concat(lines, "\r\n") .. "\r\n" end
+
 describe("read_buffer", function()
 	it("reads correctly a task with X-OC-HIDESUBTASKS ical prop", function()
 		-- given
@@ -79,6 +83,44 @@ describe("read_buffer", function()
 end)
 
 describe("write_buffer", function()
+	it("creates a simple task", function()
+		local seed = 1337
+		local uid = ic.generate_uid({}, seed)
+		local created = {
+			date = "20240301T133320Z",
+			stamp = 1709300000, -- `$ date +%s --date=2024-03-01T13:33:20Z`
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VTODO",
+			"PRODID:decscribe",
+			"DTSTAMP:" .. created.date,
+			"UID:" .. uid,
+			"CREATED:" .. created.date,
+			"LAST-MODIFIED:" .. created.date,
+			"SUMMARY:first task",
+			"PRIORITY:0",
+			"STATUS:NEEDS-ACTION",
+			"CATEGORIES:",
+			"COMPLETED:" .. created.date,
+			"PERCENT-COMPLETE:0",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq(
+			{ to_create = { [uid] = ical } },
+			app.write_buffer({
+				lines = {},
+				tasks = ts.Tasks:new(),
+			}, {
+				new_lines = { "- [ ] first task" },
+				fresh_timestamp = created.stamp,
+				seed = seed,
+			})
+		)
+	end)
+
 	it("updates a due date insert", function()
 		-- given
 		---@type decscribe.State
