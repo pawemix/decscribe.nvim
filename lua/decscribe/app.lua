@@ -292,7 +292,14 @@ function M.read_buffer(state, params)
 	params.ui.buf_set_opt("modified", false)
 end
 
----@class decscribe.WriteBufferParams
+---@alias decscribe.WriteBufferParams
+---| decscribe.WriteBufferParamsOP
+---| decscribe.WriteBufferParamsFP
+
+---@class decscribe.WriteBufferParamsFP
+---@field new_lines string[]
+
+---@class decscribe.WriteBufferParamsOP
 ---@field db_update_ical fun(uid: ical.uid_t, ical: ical.ical_t)
 ---@field db_delete_ical fun(uid: ical.uid_t)
 ---@field ui decscribe.UiFacade
@@ -301,7 +308,7 @@ end
 ---@param params decscribe.WriteBufferParams
 function M.write_buffer(state, params)
 	local old_contents = state.lines
-	local new_contents = params.ui.buf_get_lines(0, -1)
+	local new_contents = params.new_lines or params.ui.buf_get_lines(0, -1)
 	local hunks = vim.diff(
 		table.concat(old_contents, "\n"),
 		table.concat(new_contents, "\n"),
