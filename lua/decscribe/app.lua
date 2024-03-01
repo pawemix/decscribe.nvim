@@ -381,7 +381,9 @@ function M.write_buffer(state, params)
 
 	-- updating succeeded
 	state.lines = new_contents
-	params.ui.buf_set_opt("modified", false)
+	if (params.ui or {}).buf_set_opt then
+		params.ui.buf_set_opt("modified", false)
+	end
 end
 
 ---@alias decscribe.CollLabel string
