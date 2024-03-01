@@ -182,7 +182,6 @@ local function on_line_changed(state, idx, new_line, params)
 					error("unexpected type of change: " .. vim.inspect(change))
 				end
 				table.insert(ical_entries, i, new_entry)
-
 			end
 			break
 		end
@@ -241,7 +240,10 @@ function M.open_buffer(state, params)
 	if state.main_buf_nr == nil then
 		state.main_buf_nr = vim.api.nvim_create_buf(true, false)
 
-		vim.api.nvim_buf_set_name(state.main_buf_nr, "decscribe://" .. state.decsync_dir)
+		vim.api.nvim_buf_set_name(
+			state.main_buf_nr,
+			"decscribe://" .. state.decsync_dir
+		)
 		vim.api.nvim_buf_set_option(state.main_buf_nr, "filetype", "decscribe")
 		vim.api.nvim_buf_set_option(state.main_buf_nr, "buftype", "acwrite")
 		-- vim.api.nvim_buf_set_option(bufnr, "number", false)
