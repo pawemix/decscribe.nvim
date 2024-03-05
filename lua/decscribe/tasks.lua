@@ -9,6 +9,14 @@ function M.vtodo_comp_default(vtodo1, vtodo2)
 	local completed2 = vtodo2.completed and 1 or 0
 	if completed1 ~= completed2 then return completed1 < completed2 end
 
+	local due1 = (vtodo1.due or {}).timestamp
+	local due2 = (vtodo2.due or {}).timestamp
+	-- if one of the tasks does not have a due date, it defaults to anything AFTER
+	-- the other:
+	if not due1 and due2 then due1 = due2 + 1 end
+	if due1 and not due2 then due2 = due1 + 1 end
+	if due1 ~= due2 then return due1 < due2 end
+
 	local priority1 = tonumber(vtodo1.priority) or 0
 	local priority2 = tonumber(vtodo2.priority) or 0
 	if priority1 ~= priority2 then return priority1 < priority2 end
