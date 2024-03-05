@@ -103,6 +103,7 @@ end
 
 ---@class ical.CreateIcalVtodo.Params
 ---@field fresh_timestamp? integer used for "created at" properties etc.
+---@field tzid? string time zone id
 
 ---@param uid ical.uid_t
 ---@param vtodo ical.vtodo_t
@@ -134,6 +135,19 @@ function M.create_ical_vtodo(uid, vtodo, params)
 		parent_uid_entry = "RELATED-TO;RELTYPE=PARENT:" .. vtodo.parent_uid
 	end
 
+	local due_entry = nil
+	if vtodo.due then
+		if vtodo.due.precision == M.DatePrecision.Date then
+			due_entry = "DUE;VALUE=DATE:" .. os.date("%Y%m%d", vtodo.due.timestamp)
+		elseif vtodo.due.precision == M.DatePrecision.DateTime then
+			assert(params.tzid, "TZID required to print due date but not given")
+			local due_date_str = os.date("%Y%m%dT%H%M%S", vtodo.due.timestamp)
+			due_entry = "DUE;TZID=" .. params.tzid .. ":" .. due_date_str
+		else
+			error("Unexpected value of DatePrecision")
+		end
+	end
+
 	local out = vim.tbl_flatten({
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
@@ -153,6 +167,7 @@ function M.create_ical_vtodo(uid, vtodo, params)
 		parent_uid_entry,
 		"COMPLETED:" .. created_stamp,
 		"PERCENT-COMPLETE:" .. (vtodo.completed and "100" or "0"),
+		(due_entry or {}),
 		"END:VTODO",
 		"END:VCALENDAR",
 	})
@@ -271,6 +286,21 @@ function M.parse_md_line(line)
 		local timestamp = os.time({ year = year, month = month, day = day })
 		due = { timestamp = timestamp, precision = M.DatePrecision.Date }
 	end
+	-- FIXME: space between date and time not enforced here,
+	-- i.e. e.g. "2024-06-1212:36" is parsed as proper datetime
+	local _, due_time_end, hour, min = line:find("^(%d%d):(%d%d)%s*")
+	if due_date_end and due_time_end then
+		line = line:sub(due_time_end + 1)
+		local timestamp = os.time({
+			year = year,
+			month = month,
+			day = day,
+			hour = hour,
+			min = min,
+			sec = 0,
+		})
+		due = { timestamp = timestamp, precision = M.DatePrecision.DateTime }
+	end
 
 	local priority = nil
 	local _, prio_end, prio = line:find("^!([0-9HML])%s*")
@@ -308,8 +338,14 @@ end
 function M.to_md_line(vtodo)
 	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
 
-	if vtodo.due and vtodo.due.precision == M.DatePrecision.Date then
-		line = line .. " " .. os.date("%Y-%m-%d", vtodo.due.timestamp)
+	if vtodo.due then
+		if vtodo.due.precision == M.DatePrecision.Date then
+			line = line .. " " .. os.date("%Y-%m-%d", vtodo.due.timestamp)
+		elseif vtodo.due.precision == M.DatePrecision.DateTime then
+			line = line .. " " .. os.date("%Y-%m-%d %H:%M", vtodo.due.timestamp)
+		else
+			error("Unexpected kind of due date: " .. vim.inspect(vtodo.due))
+		end
 	end
 
 	if vtodo.priority and vtodo.priority ~= M.priority_t.undefined then
@@ -351,14 +387,39 @@ function M.vtodo_from_ical(ical)
 			vtodo_proto.description = entry.value
 		elseif entry.key == "RELATED-TO" and entry.opts["RELTYPE"] == "PARENT" then
 			vtodo_proto.parent_uid = entry.value
-		elseif entry.key == "DUE" and entry.opts["VALUE"] == "DATE" then
-			local due_str = entry.value
-			local _, _, year, month, day =
-				string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
-			if year and month and day then
-				local due_timestamp = os.time({ year = year, month = month, day = day })
-				vtodo_proto.due =
-					{ timestamp = due_timestamp, precision = M.DatePrecision.Date }
+		elseif entry.key == "DUE" then
+			if entry.opts["VALUE"] == "DATE" then
+				local due_str = entry.value
+				local _, _, year, month, day =
+					string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
+				if year and month and day then
+					local due_timestamp =
+						os.time({ year = year, month = month, day = day })
+					vtodo_proto.due =
+						{ timestamp = due_timestamp, precision = M.DatePrecision.Date }
+				end
+			elseif entry.opts["TZID"] then
+				local due_str = entry.value
+				local _, _, year, month, day, hour, minute =
+					string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)")
+				if year and month and day and hour and minute then
+					local due_timestamp = os.time({
+						year = year,
+						month = month,
+						day = day,
+						hour = hour,
+						minute = minute,
+					})
+					vtodo_proto.due =
+						{ timestamp = due_timestamp, precision = M.DatePrecision.DateTime }
+				else
+					error(
+						"Unexpected format of Ical DUE value: " .. vim.inspect(entry.value)
+					)
+				end
+			else
+				-- TODO: handle (or panic on) TZID different than the configured one
+				error("Unhandled DUE Ical property: " .. vim.inspect(entry))
 			end
 		end
 	end

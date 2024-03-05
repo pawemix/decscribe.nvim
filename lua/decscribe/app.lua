@@ -14,6 +14,7 @@ local M = {}
 ---@field lines string[]
 ---@field curr_coll_id string?
 ---@field decsync_dir string?
+---@field tzid string? ICalendar timezone info, e.g.: "America/Chicago"
 
 ---XXX: Indices in `todos` will change - any data referring to those indices
 ---may break unless properly handled.
@@ -46,6 +47,7 @@ local function on_line_added(state, idx, line, params)
 
 	local ical = ic.create_ical_vtodo(uid, vtodo, {
 		fresh_timestamp = params.fresh_timestamp,
+		tzid = state.tzid,
 	})
 	---@type tasks.Task
 	local todo = {
@@ -132,6 +134,12 @@ local function on_line_changed(state, idx, new_line, params)
 		local due_date_str = os.date("%Y%m%d", vtodo.due.timestamp)
 		---@cast due_date_str string
 		changes["DUE"] = { value = due_date_str, opts = { VALUE = "DATE" } }
+	elseif due.precision == ic.DatePrecision.DateTime then
+		local due_date_str = os.date("%Y%m%dT%H%M%S", due.timestamp)
+		local tzid = state.tzid
+		assert(tzid, "Cannot write timezone-specific datetime without tzid")
+		---@cast due_date_str string
+		changes["DUE"] = { value = due_date_str, opts = { TZID = tzid } }
 	else
 		error("Unhandled state of DUE property")
 	end
