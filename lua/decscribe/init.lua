@@ -117,7 +117,14 @@ local function nvim_buf_set_lines(start, end_, lines)
 	vim.api.nvim_buf_set_lines(bufnr, start, end_, false, lines)
 end
 
-function M.setup()
+---@class (exact) decscribe.SetupOptions
+---@field tzid? string timezone info, as per ICalendar TZID property
+
+---@param opts? decscribe.SetupOptions
+function M.setup(opts)
+	opts = opts or {}
+	state.tzid = opts.tzid or "America/Chicago"
+
 	-- set up autocmds for reading/writing the buffer:
 	local augroup = vim.api.nvim_create_augroup("Decscribe", { clear = true })
 
