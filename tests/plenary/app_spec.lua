@@ -318,4 +318,96 @@ describe("write_buffer", function()
 			"END:CALENDAR",
 		}, "\r\n") .. "\r\n", updated_ical)
 	end)
+
+	it("updates a due datetime (up to minutes) insert", function()
+		-- given
+		---@type decscribe.State
+		local state = {
+			tzid = "America/Chicago",
+			lines = { "- [ ] something" },
+			tasks = ts.Tasks:new(),
+		}
+		state.tasks:add("1234", {
+			uid = "1234",
+			ical = table.concat({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"END:VTODO",
+				"END:CALENDAR",
+			}, "\r\n") .. "\r\n",
+			vtodo = {
+				summary = "something",
+				completed = false,
+			},
+		})
+		-- when
+		local updated_ical = nil
+		app.write_buffer(state, {
+			ui = {
+				buf_set_lines = function() end,
+				buf_get_lines = function()
+					return { "- [ ] 2024-04-15 09:06 something" }
+				end,
+				buf_set_opt = function() end,
+			},
+			db_delete_ical = function() end,
+			db_update_ical = function(_, ical) updated_ical = ical end,
+		})
+		eq(table.concat({
+			"BEGIN:CALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;TZID=America/Chicago:20240415T090600",
+			"END:VTODO",
+			"END:CALENDAR",
+		}, "\r\n") .. "\r\n", updated_ical)
+	end)
+
+	it("creates with a due datetime insert", function()
+		-- given
+		---@type decscribe.State
+		local state = {
+			tzid = "America/Chicago",
+			lines = {},
+			tasks = ts.Tasks:new(),
+		}
+		local new_due_md = "2023-07-12 06:34"
+		local new_due_ic = "20230712T063400"
+		local created_tstamp = 1555774466
+		local created_datetime = "20190420T153426Z"
+		local new_uid = ic.generate_uid({}, 42)
+		local new_ical = table.concat({
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VTODO",
+			"PRODID:decscribe",
+			"DTSTAMP:" .. created_datetime,
+			"UID:" .. new_uid,
+			"CREATED:" .. created_datetime,
+			"LAST-MODIFIED:" .. created_datetime,
+			"SUMMARY:something",
+			"PRIORITY:0", -- TODO: remove
+			"STATUS:NEEDS-ACTION",
+			"CATEGORIES:", -- TODO: remove
+			"COMPLETED:" .. created_datetime, -- TODO: remove
+			"PERCENT-COMPLETE:0", -- TODO: remove
+			"DUE;TZID=America/Chicago:" .. new_due_ic,
+			"END:VTODO",
+			"END:VCALENDAR",
+		}, "\r\n") .. "\r\n"
+		local actual = app.write_buffer(
+			state,
+			{
+				new_lines = { "- [ ] " .. new_due_md .. " something" },
+				seed = 42,
+				fresh_timestamp = created_tstamp,
+			}
+		)
+		eq({ [new_uid] = new_ical } , actual.to_create)
+	end)
+
+	-- TODO: update due datetime update
 end)
