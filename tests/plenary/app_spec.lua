@@ -109,7 +109,7 @@ describe("write_buffer", function()
 			"END:VCALENDAR",
 		})
 		eq(
-			{ changes = { [uid] = ical } },
+			ical,
 			app.write_buffer({
 				lines = {},
 				tasks = ts.Tasks:new(),
@@ -117,7 +117,7 @@ describe("write_buffer", function()
 				new_lines = { "- [ ] first task" },
 				fresh_timestamp = created.stamp,
 				seed = seed,
-			})
+			}).changes[uid]
 		)
 	end)
 
@@ -146,29 +146,22 @@ describe("write_buffer", function()
 			},
 		})
 		-- when
-		local updated_ical = nil
-		app.write_buffer(state, {
-			ui = {
-				buf_set_lines = function() end,
-				buf_get_lines = function() return { "- [ ] 2024-04-12 !H something" } end,
-				buf_set_opt = function() end,
-			},
-			db_delete_ical = function() end,
-			db_update_ical = function(_, ical)
-				updated_ical = ical
-				-- due = { precision = ic.DatePrecision.Date, timestamp = os.time({ year = }) }
-			end,
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] 2024-04-12 !H something" },
 		})
-		eq(table.concat({
-			"BEGIN:CALENDAR",
-			"BEGIN:VTODO",
-			"PRIORITY:1",
-			"STATUS:NEEDS-ACTION",
-			"SUMMARY:something",
-			"DUE;VALUE=DATE:20240412",
-			"END:VTODO",
-			"END:CALENDAR",
-		}, "\r\n") .. "\r\n", updated_ical)
+		eq(
+			to_ical({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"PRIORITY:1",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"DUE;VALUE=DATE:20240412",
+				"END:VTODO",
+				"END:CALENDAR",
+			}),
+			actual.changes["1234"]
+		)
 	end)
 
 	it("updates a due date update", function()
@@ -201,26 +194,22 @@ describe("write_buffer", function()
 			},
 		})
 		-- when
-		local updated_ical = nil
-		app.write_buffer(state, {
-			ui = {
-				buf_set_lines = function() end,
-				buf_get_lines = function() return { "- [ ] 2024-04-18 !H something" } end,
-				buf_set_opt = function() end,
-			},
-			db_delete_ical = function() end,
-			db_update_ical = function(_, ical) updated_ical = ical end,
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] 2024-04-18 !H something" },
 		})
-		eq(table.concat({
-			"BEGIN:CALENDAR",
-			"BEGIN:VTODO",
-			"PRIORITY:1",
-			"DUE;VALUE=DATE:20240418",
-			"STATUS:NEEDS-ACTION",
-			"SUMMARY:something",
-			"END:VTODO",
-			"END:CALENDAR",
-		}, "\r\n") .. "\r\n", updated_ical)
+		eq(
+			to_ical({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"PRIORITY:1",
+				"DUE;VALUE=DATE:20240418",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"END:VTODO",
+				"END:CALENDAR",
+			}),
+			actual.changes["1234"]
+		)
 	end)
 
 	it("updates a due date removal", function()
@@ -253,25 +242,21 @@ describe("write_buffer", function()
 			},
 		})
 		-- when
-		local updated_ical = nil
-		app.write_buffer(state, {
-			ui = {
-				buf_set_lines = function() end,
-				buf_get_lines = function() return { "- [ ] !H something" } end,
-				buf_set_opt = function() end,
-			},
-			db_delete_ical = function() end,
-			db_update_ical = function(_, ical) updated_ical = ical end,
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] !H something" },
 		})
-		eq(table.concat({
-			"BEGIN:CALENDAR",
-			"BEGIN:VTODO",
-			"PRIORITY:1",
-			"STATUS:NEEDS-ACTION",
-			"SUMMARY:something",
-			"END:VTODO",
-			"END:CALENDAR",
-		}, "\r\n") .. "\r\n", updated_ical)
+		eq(
+			to_ical({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"PRIORITY:1",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"END:VTODO",
+				"END:CALENDAR",
+			}),
+			actual.changes["1234"]
+		)
 	end)
 
 	it("updates a category removal", function()
@@ -299,24 +284,20 @@ describe("write_buffer", function()
 			},
 		})
 		-- when
-		local updated_ical = nil
-		app.write_buffer(state, {
-			ui = {
-				buf_set_lines = function() end,
-				buf_get_lines = function() return { "- [ ] something" } end,
-				buf_set_opt = function() end,
-			},
-			db_delete_ical = function() end,
-			db_update_ical = function(_, ical) updated_ical = ical end,
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] something" },
 		})
-		eq(table.concat({
-			"BEGIN:CALENDAR",
-			"BEGIN:VTODO",
-			"STATUS:NEEDS-ACTION",
-			"SUMMARY:something",
-			"END:VTODO",
-			"END:CALENDAR",
-		}, "\r\n") .. "\r\n", updated_ical)
+		eq(
+			to_ical({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"END:VTODO",
+				"END:CALENDAR",
+			}),
+			actual.changes["1234"]
+		)
 	end)
 
 	it("updates a due datetime (up to minutes) insert", function()
@@ -343,27 +324,21 @@ describe("write_buffer", function()
 			},
 		})
 		-- when
-		local updated_ical = nil
-		app.write_buffer(state, {
-			ui = {
-				buf_set_lines = function() end,
-				buf_get_lines = function()
-					return { "- [ ] 2024-04-15 09:06 something" }
-				end,
-				buf_set_opt = function() end,
-			},
-			db_delete_ical = function() end,
-			db_update_ical = function(_, ical) updated_ical = ical end,
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] 2024-04-15 09:06 something" },
 		})
-		eq(table.concat({
-			"BEGIN:CALENDAR",
-			"BEGIN:VTODO",
-			"STATUS:NEEDS-ACTION",
-			"SUMMARY:something",
-			"DUE;TZID=America/Chicago:20240415T090600",
-			"END:VTODO",
-			"END:CALENDAR",
-		}, "\r\n") .. "\r\n", updated_ical)
+		eq(
+			to_ical({
+				"BEGIN:CALENDAR",
+				"BEGIN:VTODO",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"DUE;TZID=America/Chicago:20240415T090600",
+				"END:VTODO",
+				"END:CALENDAR",
+			}),
+			actual.changes["1234"]
+		)
 	end)
 
 	it("creates with a due datetime insert", function()
