@@ -323,8 +323,8 @@ end
 ---@field db_delete_ical fun(uid: ical.uid_t)
 ---@field ui decscribe.UiFacade
 
----@class decscribe.WriteBufferOutcome
----@field to_create table<ical.uid_t, ical.ical_t>
+---@class (exact) decscribe.WriteBufferOutcome
+---@field changes table<ical.uid_t, ical.ical_t>
 
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
@@ -338,6 +338,8 @@ function M.write_buffer(state, params)
 		{ result_type = "indices" }
 	)
 	assert(type(hunks) == "table", "Decscribe: unexpected diff output")
+	---@type decscribe.WriteBufferOutcome
+	local out = { changes = {} }
 	local lines_to_affect = {}
 	for _, hunk in ipairs(hunks) do
 		local old_start, old_count, new_start, new_count = unpack(hunk)
@@ -393,8 +395,6 @@ function M.write_buffer(state, params)
 	-- removing/adding entries:
 	table.sort(lines_to_affect, function(a, b) return a.idx > b.idx end)
 	-- apply pending changes
-	---@type decscribe.WriteBufferOutcome
-	local out = { to_create = {} }
 	for _, change in ipairs(lines_to_affect) do
 		local idx = change.idx
 		if change.line == nil then
@@ -403,10 +403,10 @@ function M.write_buffer(state, params)
 			local added_uid, added_ical =
 				on_line_added(state, idx, change.line, params)
 			assert(
-				not out.to_create[added_uid],
+				not out.changes[added_uid],
 				"when collecting new tasks to create, some have colliding UIDs"
 			)
-			out.to_create[added_uid] = added_ical
+			out.changes[added_uid] = added_ical
 		end
 	end
 

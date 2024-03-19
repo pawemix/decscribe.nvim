@@ -109,7 +109,7 @@ describe("write_buffer", function()
 			"END:VCALENDAR",
 		})
 		eq(
-			{ to_create = { [uid] = ical } },
+			{ changes = { [uid] = ical } },
 			app.write_buffer({
 				lines = {},
 				tasks = ts.Tasks:new(),
@@ -406,7 +406,7 @@ describe("write_buffer", function()
 				fresh_timestamp = created_tstamp,
 			}
 		)
-		eq({ [new_uid] = new_ical } , actual.to_create)
+		eq({ [new_uid] = new_ical } , actual.changes)
 	end)
 
 	-- TODO: update due datetime update
