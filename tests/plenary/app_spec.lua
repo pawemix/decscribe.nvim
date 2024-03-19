@@ -398,15 +398,12 @@ describe("write_buffer", function()
 			"END:VTODO",
 			"END:VCALENDAR",
 		}, "\r\n") .. "\r\n"
-		local actual = app.write_buffer(
-			state,
-			{
-				new_lines = { "- [ ] " .. new_due_md .. " something" },
-				seed = 42,
-				fresh_timestamp = created_tstamp,
-			}
-		)
-		eq({ [new_uid] = new_ical } , actual.changes)
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] " .. new_due_md .. " something" },
+			seed = 42,
+			fresh_timestamp = created_tstamp,
+		})
+		eq({ [new_uid] = new_ical }, actual.changes)
 	end)
 
 	-- TODO: update due datetime update
