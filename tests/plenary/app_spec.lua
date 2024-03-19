@@ -121,6 +121,29 @@ describe("write_buffer", function()
 		)
 	end)
 
+	it("deletes a simple task", function()
+		-- given
+		local state = {
+			lines = { "- [ ] something" },
+			tasks = ts.Tasks:new(),
+		}
+		state.tasks:add("1234", {
+			uid = "1234",
+			vtodo = { completed = false, summary = "something" },
+			ical = to_ical({
+				"BEGIN:VTODO",
+				"STATUS:NEEDS-ACTION",
+				"SUMMARY:something",
+				"END:VTODO",
+			}),
+		})
+		-- when & then
+		eq(
+			{ ["1234"] = false },
+			app.write_buffer(state, { new_lines = {} }).changes
+		)
+	end)
+
 	it("updates a due date insert", function()
 		-- given
 		---@type decscribe.State
