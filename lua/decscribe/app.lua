@@ -21,13 +21,17 @@ local M = {}
 ---@param state decscribe.State
 ---@param idx integer
 ---@param params decscribe.WriteBufferParams
+---@return ical.uid_t to_be_removed
 local function on_line_removed(state, idx, params)
 	local deleted_task = state.tasks:delete_at(idx)
 	assert(
 		deleted_task,
 		"Tried deleting task at index " .. idx .. "but there was nothing there"
 	)
-	params.db_delete_ical(deleted_task.uid)
+	if (params or {}).db_delete_ical then
+		params.db_delete_ical(deleted_task.uid)
+	end
+	return deleted_task.uid
 end
 
 ---XXX: Indices in `todos` will change - any data referring to those indices
@@ -327,7 +331,7 @@ end
 ---@field ui decscribe.UiFacade
 
 ---@class (exact) decscribe.WriteBufferOutcome
----@field changes table<ical.uid_t, ical.ical_t>
+---@field changes table<ical.uid_t, ical.ical_t|false>
 
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
@@ -408,7 +412,9 @@ function M.write_buffer(state, params)
 	for _, change in ipairs(lines_to_affect) do
 		local idx = change.idx
 		if change.line == nil then
-			on_line_removed(state, idx, params)
+			local removed_uid = on_line_removed(state, idx, params)
+			assert(type(removed_uid) == "string")
+			out.changes[removed_uid] = false
 		else
 			local added_uid, added_ical =
 				on_line_added(state, idx, change.line, params)
