@@ -32,11 +32,14 @@
 - [x] due dates
 - [x] ical: if CATEGORIES are empty, remove the Ical entry altogether
 - [x] ical: if any generic Ical field is empty, remove the Ical entry altogether
-- [ ] refactor app.lua's functions to impureim sandwiches, for easier testing
-- [ ] due datetimes
+- [x] due datetimes
+- [x] app.lua: write_buffer: refactor to impureim sandwich for easier testing
+- [ ] app.lua: read_buffer: refactor to impureim sandwich for easier testing
+- [ ] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
 - [ ] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [ ] subtasks
 - [ ] refactor ical struct to a map with a default sorting, instead of a list
+- [ ] consider `nvim_buf_attach` to continuously watch for buffer changes
 - [ ] handle complex hunks (mix of changes and removals/additions)
 - [ ] built-in <c-a>/<c-i> override to cycle through `[HML]` priorities
 - [ ] when existing items are moved, retain their UIDs instead of deleting and creating?
