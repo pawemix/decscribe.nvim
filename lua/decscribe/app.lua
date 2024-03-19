@@ -28,9 +28,6 @@ local function on_line_removed(state, idx, params)
 		deleted_task,
 		"Tried deleting task at index " .. idx .. "but there was nothing there"
 	)
-	if (params or {}).db_delete_ical then
-		params.db_delete_ical(deleted_task.uid)
-	end
 	return deleted_task.uid
 end
 
@@ -61,7 +58,6 @@ local function on_line_added(state, idx, line, params)
 		ical = ical,
 	}
 	state.tasks:add_at(idx, todo)
-	if params.db_update_ical then params.db_update_ical(uid, ical) end
 	return uid, ical
 end
 
@@ -202,7 +198,6 @@ local function on_line_changed(state, idx, new_line, params)
 	assert(#changes == 0, "some changes were unexpectedly not applied")
 
 	local out_ical = ic.ical_show(ical_entries)
-	if (params or {}).db_update_ical then params.db_update_ical(uid, out_ical) end
 	return uid, out_ical
 end
 
@@ -316,19 +311,10 @@ function M.read_buffer(state, params)
 	params.ui.buf_set_opt("modified", false)
 end
 
----@alias decscribe.WriteBufferParams
----| decscribe.WriteBufferParamsOP
----| decscribe.WriteBufferParamsFP
-
----@class decscribe.WriteBufferParamsFP
+---@class decscribe.WriteBufferParams
 ---@field new_lines string[]
 ---@field fresh_timestamp? integer
 ---@field seed? integer used for random operations
-
----@class decscribe.WriteBufferParamsOP
----@field db_update_ical fun(uid: ical.uid_t, ical: ical.ical_t)
----@field db_delete_ical fun(uid: ical.uid_t)
----@field ui decscribe.UiFacade
 
 ---@class (exact) decscribe.WriteBufferOutcome
 ---@field changes table<ical.uid_t, ical.ical_t|false>
@@ -338,7 +324,7 @@ end
 ---@return decscribe.WriteBufferOutcome
 function M.write_buffer(state, params)
 	local old_contents = state.lines
-	local new_contents = params.new_lines or params.ui.buf_get_lines(0, -1)
+	local new_contents = params.new_lines
 	local hunks = vim.diff(
 		table.concat(old_contents, "\n"),
 		table.concat(new_contents, "\n"),
@@ -428,9 +414,6 @@ function M.write_buffer(state, params)
 
 	-- updating succeeded
 	state.lines = new_contents
-	if (params.ui or {}).buf_set_opt then
-		params.ui.buf_set_opt("modified", false)
-	end
 
 	return out
 end

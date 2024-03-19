@@ -147,15 +147,17 @@ function M.setup(opts)
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			app.write_buffer(state, {
-				db_delete_ical = lds_delete_ical,
-				db_update_ical = lds_update_ical,
-				ui = {
-					buf_set_lines = nvim_buf_set_lines,
-					buf_get_lines = nvim_buf_get_lines,
-					buf_set_opt = nvim_buf_set_opt,
-				},
+			local out = app.write_buffer(state, {
+				new_lines = nvim_buf_get_lines(0, -1),
 			})
+			for uid, ical in pairs(out.changes) do
+				if ical then
+					lds_update_ical(uid, ical)
+				else
+					lds_delete_ical(uid)
+				end
+			end
+			nvim_buf_set_opt("modified", false)
 		end,
 	})
 
