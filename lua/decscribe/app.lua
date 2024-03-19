@@ -65,6 +65,7 @@ end
 ---@param idx integer
 ---@param new_line string
 ---@param params decscribe.WriteBufferParams
+---@return ical.uid_t?, ical.ical_t?
 local function on_line_changed(state, idx, new_line, params)
 	local changed_todo = state.tasks:get_at(idx)
 	assert(
@@ -196,7 +197,9 @@ local function on_line_changed(state, idx, new_line, params)
 	end
 	assert(#changes == 0, "some changes were unexpectedly not applied")
 
-	params.db_update_ical(uid, ic.ical_show(ical_entries))
+	local out_ical = ic.ical_show(ical_entries)
+	if (params or {}).db_update_ical then params.db_update_ical(uid, out_ical) end
+	return uid, out_ical
 end
 
 ---@class (exact) decscribe.OpenBufferParams
@@ -384,7 +387,14 @@ function M.write_buffer(state, params)
 			assert(count > 0, "decscribe: diff count in this hunk cannot be 0")
 			for idx = start, start + count - 1 do
 				local new_line = new_contents[idx]
-				on_line_changed(state, idx, new_line, params)
+				local new_uid, new_ical = on_line_changed(state, idx, new_line, params)
+				if new_uid and new_ical then
+					assert(
+						not out.changes[new_uid],
+						"when collecting new tasks to create, some have colliding UIDs"
+					)
+					out.changes[new_uid] = new_ical
+				end
 			end
 		-- different scenario
 		else
