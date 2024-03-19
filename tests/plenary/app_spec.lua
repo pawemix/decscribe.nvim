@@ -406,5 +406,51 @@ describe("write_buffer", function()
 		eq({ [new_uid] = new_ical }, actual.changes)
 	end)
 
-	-- TODO: update due datetime update
+	it("updates with a due datetime update", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local due_tstamp = 1555774440
+		local due_md = "2019-04-20 15:34"
+		local due_ical = "20190420T153400"
+		local created_tstamp = 1555774466
+		local line = "- [ ] " .. due_md .. " something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			due = {
+				precision = ic.DatePrecision.DateTime,
+				timestamp = due_tstamp,
+			},
+		}
+		local ical = to_ical({
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;TZID=America/Chicago:" .. due_ical,
+			"END:VTODO",
+		})
+		---@type decscribe.State
+		local state = {
+			tzid = "America/Chicago",
+			lines = { line },
+			tasks = ts.Tasks:new(),
+		}
+		state.tasks:add(uid, { uid = uid, vtodo = vtodo, ical = ical })
+		-- when
+		local actual = app.write_buffer(state, {
+			new_lines = { "- [ ] 2024-04-15 16:09 something" },
+			seed = 42,
+			fresh_timestamp = created_tstamp,
+		})
+		-- then
+		local new_due_ical = "20240415T160900"
+		local new_ical = to_ical({
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;TZID=America/Chicago:" .. new_due_ical,
+			"END:VTODO",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
 end)
