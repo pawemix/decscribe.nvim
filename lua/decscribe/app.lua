@@ -272,18 +272,26 @@ function M.open_buffer(state, params)
 	M.read_buffer(state, params.read_buffer_params)
 end
 
----@class (exact) decscribe.ReadBufferParams
+---@class decscribe.ReadBufferParamsFP
+---@field icals table<ical.uid_t, ical.ical_t>
+
+---@class (exact) decscribe.ReadBufferParamsOP
 ---@field db_retrieve_icals fun(): table<ical.uid_t, ical.ical_t>
 ---@field ui decscribe.UiFacade
 
+---@alias decscribe.ReadBufferParams
+---| decscribe.ReadBufferParamsOP
+---| decscribe.ReadBufferParamsFP
+
 ---@param state decscribe.State
 ---@param params decscribe.ReadBufferParams
+---@return string[] lines
 function M.read_buffer(state, params)
 	-- tasklist has to be recreated from scratch, so that there are no leftovers,
 	-- e.g. from a different collection/dsdir
 	state.tasks = ts.Tasks:new()
 
-	local uid_to_icals = params.db_retrieve_icals()
+	local uid_to_icals = params.icals or params.db_retrieve_icals()
 
 	for todo_uid, todo_ical in pairs(uid_to_icals) do
 		---@type ical.vtodo_t
@@ -307,8 +315,11 @@ function M.read_buffer(state, params)
 	end
 
 	-- initially fill the buffer with initial data:
-	params.ui.buf_set_lines(0, -1, state.lines)
-	params.ui.buf_set_opt("modified", false)
+	if (params.ui or {}).buf_set_lines and (params.ui or {}).buf_set_opt then
+		params.ui.buf_set_lines(0, -1, state.lines)
+		params.ui.buf_set_opt("modified", false)
+	end
+	return state.lines
 end
 
 ---@class decscribe.WriteBufferParams
