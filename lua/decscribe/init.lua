@@ -132,14 +132,9 @@ function M.setup(opts)
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			app.read_buffer(state, {
-				db_retrieve_icals = lds_retrieve_icals,
-				ui = {
-					buf_set_lines = nvim_buf_set_lines,
-					buf_get_lines = nvim_buf_get_lines,
-					buf_set_opt = nvim_buf_set_opt,
-				},
-			})
+			local new_lines = app.read_buffer(state, { icals = lds_retrieve_icals() })
+			nvim_buf_set_lines(0, -1, new_lines)
+			nvim_buf_set_opt("modified", false)
 		end,
 	})
 
