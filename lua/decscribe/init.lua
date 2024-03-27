@@ -67,8 +67,12 @@ local function list_collections(ds_dir)
 end
 
 local function lds_retrieve_icals()
-	conn =
-		lds.connect(state.decsync_dir, "tasks", state.curr_coll_id, lds.get_app_id(APP_NAME))
+	conn = lds.connect(
+		state.decsync_dir,
+		"tasks",
+		state.curr_coll_id,
+		lds.get_app_id(APP_NAME)
+	)
 	local uid_to_ical = {}
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
@@ -156,33 +160,37 @@ function M.setup(opts)
 		end,
 	})
 
-	vim.api.nvim_create_user_command("Decscribe", function(params)
-		app.open_buffer(state, {
-			decsync_dir = params.fargs[1],
-			collection_label = params.fargs[2],
-			list_collections_fn = list_collections,
-			read_buffer_params = {
-				db_retrieve_icals = lds_retrieve_icals,
-				ui = {
-					buf_set_lines = nvim_buf_set_lines,
-					buf_get_lines = nvim_buf_get_lines,
-					buf_set_opt = nvim_buf_set_opt,
+	vim.api.nvim_create_user_command(
+		"Decscribe",
+		function(params)
+			app.open_buffer(state, {
+				decsync_dir = params.fargs[1],
+				collection_label = params.fargs[2],
+				list_collections_fn = list_collections,
+				read_buffer_params = {
+					db_retrieve_icals = lds_retrieve_icals,
+					ui = {
+						buf_set_lines = nvim_buf_set_lines,
+						buf_get_lines = nvim_buf_get_lines,
+						buf_set_opt = nvim_buf_set_opt,
+					},
 				},
-			}
-		})
-	end, {
-		nargs = "+",
-		---@type CompleteCustomListFunc
-		complete = function(arg_lead, cmd_line)
-			return app.complete_commandline(arg_lead, cmd_line, {
+			})
+		end,
+		{
+			nargs = "+",
+			---@type CompleteCustomListFunc
+			complete = function(arg_lead, cmd_line)
+				return app.complete_commandline(arg_lead, cmd_line, {
 					is_decsync_dir_fn = is_decsync_dir,
 					list_collections_fn = list_collections,
-					complete_path_fn = function (path_prefix)
+					complete_path_fn = function(path_prefix)
 						return vim.fn.getcompletion(path_prefix, "file", true)
-					end
+					end,
 				})
-		end,
-	})
+			end,
+		}
+	)
 end
 
 return M
