@@ -22,26 +22,18 @@ describe("read_buffer", function()
 			tasks = ts.Tasks:new(),
 		}
 		-- when
-		local actual_lines = nil
-		app.read_buffer(state, {
-			db_retrieve_icals = function()
-				return {
-					["1234"] = table.concat({
-						"BEGIN:CALENDAR",
-						"BEGIN:VTODO",
-						"PRIORITY:1",
-						"STATUS:COMPLETED",
-						"SUMMARY:something",
-						"X-OC-HIDESUBTASKS:1",
-						"END:VTODO",
-						"END:CALENDAR",
-					}, "\r\n"),
-				}
-			end,
-			ui = {
-				buf_set_opt = function() end,
-				buf_get_lines = function() error("should not be called") end,
-				buf_set_lines = function(_, _, lines) actual_lines = lines end,
+		local actual_lines = app.read_buffer(state, {
+			icals = {
+				["1234"] = table.concat({
+					"BEGIN:CALENDAR",
+					"BEGIN:VTODO",
+					"PRIORITY:1",
+					"STATUS:COMPLETED",
+					"SUMMARY:something",
+					"X-OC-HIDESUBTASKS:1",
+					"END:VTODO",
+					"END:CALENDAR",
+				}, "\r\n"),
 			},
 		})
 		-- then
@@ -55,15 +47,8 @@ describe("read_buffer", function()
 			tasks = ts.Tasks:new(),
 		}
 		-- when
-		local actual_lines = nil
-		app.read_buffer(state, {
-			ui = {
-				buf_set_opt = function() end,
-				buf_get_lines = function() return {} end,
-				buf_set_lines = function(_, _, lines) actual_lines = lines end,
-			},
-			db_retrieve_icals = function()
-				return {
+		local actual_lines = app.read_buffer(state, {
+			icals = {
 					["1234"] = table.concat({
 						"BEGIN:CALENDAR",
 						"BEGIN:VTODO",
@@ -75,7 +60,6 @@ describe("read_buffer", function()
 						"END:CALENDAR",
 					}, "\r\n") .. "\r\n",
 				}
-			end,
 		})
 		-- then
 		eq({ "- [ ] 2024-04-15 !H something" }, actual_lines)
