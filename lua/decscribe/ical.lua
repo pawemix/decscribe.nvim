@@ -24,6 +24,7 @@ M.DatePrecision = {
 ---@field categories string[]?
 ---@field parent_uid ical.uid_t?
 ---@field due ical.Date?
+---@field dtstart ical.Date?
 local vtodo_t = {}
 
 ---@alias decscribe.ical.Ical decscribe.ical.IcalEntry[]
@@ -148,6 +149,37 @@ function M.create_ical_vtodo(uid, vtodo, params)
 		end
 	end
 
+	---@type decscribe.ical.IcalEntry
+	local dtstart_entry = nil
+	if vtodo.dtstart then
+		if vtodo.dtstart.precision == M.DatePrecision.Date then
+			local dtstart_date_str = os.date("%Y%m%d", vtodo.dtstart.timestamp)
+			dtstart_entry = {
+				key = "DTSTART",
+				opts = { VALUE = "DATE" },
+				---@cast dtstart_date_str string
+				value = dtstart_date_str,
+			}
+		elseif vtodo.dtstart.precision == M.DatePrecision.DateTime then
+			assert(params.tzid, "TZID required to print due date but not given")
+			local dtstart_date_str = os.date("%Y%m%dT%H%M%S", vtodo.dtstart.timestamp)
+			dtstart_entry = {
+				key = "DTSTART",
+				opts = { TZID = params.tzid },
+				---@cast dtstart_date_str string
+				value = dtstart_date_str,
+			}
+		else
+			error("Unexpected value of DatePrecision")
+		end
+	end
+	---@type string?
+	local dtstart_entry_str = nil
+	if dtstart_entry then
+		dtstart_entry_str = M.ical_show({ dtstart_entry })
+		dtstart_entry_str = dtstart_entry_str:sub(1, #dtstart_entry_str - 2)
+	end
+
 	local out = vim.tbl_flatten({
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
@@ -168,6 +200,7 @@ function M.create_ical_vtodo(uid, vtodo, params)
 		"COMPLETED:" .. created_stamp,
 		"PERCENT-COMPLETE:" .. (vtodo.completed and "100" or "0"),
 		(due_entry or {}),
+		(dtstart_entry_str or {}),
 		"END:VTODO",
 		"END:VCALENDAR",
 	})
@@ -278,6 +311,35 @@ function M.parse_md_line(line)
 	line = line:sub(#checkbox_heading + 1)
 
 	---@type ical.Date?
+	local dtstart = nil
+
+	local _, dts_date_end, dts_year, dts_month, dts_day, dts_hour, dts_min =
+		line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)%s+(%d%d):(%d%d)[.][.]%s*")
+	if dts_date_end then
+		line = line:sub(dts_date_end + 1)
+		local dts_timestamp = os.time({
+			year = dts_year,
+			month = dts_month,
+			day = dts_day,
+			hour = dts_hour,
+			min = dts_min,
+		})
+		dtstart =
+			{ timestamp = dts_timestamp, precision = M.DatePrecision.DateTime }
+	end
+
+	if not dtstart then
+		_, dts_date_end, dts_year, dts_month, dts_day =
+			line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)[.][.]%s*")
+		if dts_date_end then
+			line = line:sub(dts_date_end + 1)
+			local dts_timestamp =
+				os.time({ year = dts_year, month = dts_month, day = dts_day })
+			dtstart = { timestamp = dts_timestamp, precision = M.DatePrecision.Date }
+		end
+	end
+
+	---@type ical.Date?
 	local due = nil
 	local _, due_date_end, year, month, day =
 		line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)%s*")
@@ -328,6 +390,7 @@ function M.parse_md_line(line)
 		categories = categories,
 		description = nil,
 		due = due,
+		dtstart = dtstart,
 	}
 
 	return vtodo
@@ -338,14 +401,34 @@ end
 function M.to_md_line(vtodo)
 	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
 
+	local dtstart_str = nil
+	if vtodo.dtstart then
+		if vtodo.dtstart.precision == M.DatePrecision.Date then
+			dtstart_str = os.date("%Y-%m-%d", vtodo.dtstart.timestamp)
+		elseif vtodo.dtstart.precision == M.DatePrecision.DateTime then
+			dtstart_str = os.date("%Y-%m-%d %H:%M", vtodo.dtstart.timestamp)
+		else
+			error("Unexpected kind of dtstart date: " .. vim.inspect(vtodo.dtstart))
+		end
+	end
+
+	local due_str = nil
 	if vtodo.due then
 		if vtodo.due.precision == M.DatePrecision.Date then
-			line = line .. " " .. os.date("%Y-%m-%d", vtodo.due.timestamp)
+			due_str = os.date("%Y-%m-%d", vtodo.due.timestamp)
 		elseif vtodo.due.precision == M.DatePrecision.DateTime then
-			line = line .. " " .. os.date("%Y-%m-%d %H:%M", vtodo.due.timestamp)
+			due_str = os.date("%Y-%m-%d %H:%M", vtodo.due.timestamp)
 		else
 			error("Unexpected kind of due date: " .. vim.inspect(vtodo.due))
 		end
+	end
+
+	if dtstart_str and due_str then
+		line = line .. " " .. dtstart_str .. ".." .. due_str
+	elseif dtstart_str then
+		line = line .. " " .. dtstart_str .. ".."
+	elseif due_str then
+		line = line .. " " .. due_str
 	end
 
 	if vtodo.priority and vtodo.priority ~= M.priority_t.undefined then
@@ -364,6 +447,38 @@ function M.to_md_line(vtodo)
 	return line
 end
 
+---@param date_str string
+---@return ical.Date? precisioned_date_opt or nil if could not parse
+local function to_prec_date(date_str)
+	local _, _, year, month, day =
+		string.find(date_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
+	if year and month and day then
+		local timestamp = os.time({ year = year, month = month, day = day })
+		return { timestamp = timestamp, precision = M.DatePrecision.Date }
+	else
+		return nil -- unexpected format
+	end
+end
+
+---@param datetime_str string
+---@return ical.Date? precisioned_date_opt nil if could not be parsed
+local function to_prec_datetime(datetime_str)
+	local _, _, year, month, day, hour, minute =
+		string.find(datetime_str or "", "^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)")
+	if year and month and day and hour and minute then
+		local timestamp = os.time({
+			year = year,
+			month = month,
+			day = day,
+			hour = hour,
+			min = minute,
+		})
+		return { timestamp = timestamp, precision = M.DatePrecision.DateTime }
+	else
+		return nil -- unexpected format
+	end
+end
+
 ---@param ical ical.ical_t
 ---@return ical.vtodo_t
 function M.vtodo_from_ical(ical)
@@ -371,7 +486,9 @@ function M.vtodo_from_ical(ical)
 
 	local vtodo_proto = {}
 	for _, entry in ipairs(entries) do
-		if entry.key == "CATEGORIES" then
+		if entry.key == "END" and entry.value == "VTODO" then
+			break
+		elseif entry.key == "CATEGORIES" then
 			vtodo_proto.categories = vim.split(entry.value, ",", { trimempty = true })
 			-- NOTE: there is a convention (or at least tasks.org follows it) to sort
 			-- categories alphabetically:
@@ -387,40 +504,26 @@ function M.vtodo_from_ical(ical)
 			vtodo_proto.description = entry.value
 		elseif entry.key == "RELATED-TO" and entry.opts["RELTYPE"] == "PARENT" then
 			vtodo_proto.parent_uid = entry.value
+		elseif entry.key == "DTSTART" then
+			if not entry.opts then
+				vim.notify(
+					"DTSTART entry without VALUE:" .. vim.inspect(entry),
+					vim.log.levels.INFO
+				)
+			elseif entry.opts["VALUE"] == "DATE" then
+				vtodo_proto.dtstart = to_prec_date(entry.value)
+			else -- NOTE: without VALUE option treated as 'datetime' case:
+				vtodo_proto.dtstart = to_prec_datetime(entry.value)
+			end
+			assert(vtodo_proto.dtstart)
 		elseif entry.key == "DUE" then
 			if entry.opts["VALUE"] == "DATE" then
-				local due_str = entry.value
-				local _, _, year, month, day =
-					string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
-				if year and month and day then
-					local due_timestamp =
-						os.time({ year = year, month = month, day = day })
-					vtodo_proto.due =
-						{ timestamp = due_timestamp, precision = M.DatePrecision.Date }
-				end
-			elseif entry.opts["TZID"] then
-				local due_str = entry.value
-				local _, _, year, month, day, hour, minute =
-					string.find(due_str or "", "^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)")
-				if year and month and day and hour and minute then
-					local due_timestamp = os.time({
-						year = year,
-						month = month,
-						day = day,
-						hour = hour,
-						minute = minute,
-					})
-					vtodo_proto.due =
-						{ timestamp = due_timestamp, precision = M.DatePrecision.DateTime }
-				else
-					error(
-						"Unexpected format of Ical DUE value: " .. vim.inspect(entry.value)
-					)
-				end
-			else
-				-- TODO: handle (or panic on) TZID different than the configured one
-				error("Unhandled DUE Ical property: " .. vim.inspect(entry))
+				vtodo_proto.due = to_prec_date(entry.value)
+			else -- NOTE: without VALUE option it's treated as 'datetime':
+				-- TODO: this is not covered by a test
+				vtodo_proto.due = to_prec_datetime(entry.value)
 			end
+			assert(vtodo_proto.due)
 		end
 	end
 
@@ -433,6 +536,7 @@ function M.vtodo_from_ical(ical)
 		description = vtodo_proto.description,
 		parent_uid = vtodo_proto.parent_uid,
 		due = vtodo_proto.due,
+		dtstart = vtodo_proto.dtstart,
 	}
 	return vtodo
 end

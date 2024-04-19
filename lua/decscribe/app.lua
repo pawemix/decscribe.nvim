@@ -128,6 +128,23 @@ local function on_line_changed(state, idx, new_line, params)
 			{ value = parent_uid, opts = { RELTYPE = "PARENT" } }
 	end
 
+	local dtstart = vtodo.dtstart
+	if not dtstart then
+		changes["DTSTART"] = false
+	elseif dtstart.precision == ic.DatePrecision.Date then
+		local dtstart_date_str = os.date("%Y%m%d", dtstart.timestamp)
+		---@cast dtstart_date_str string
+		changes["DTSTART"] = { value = dtstart_date_str, opts = { VALUE = "DATE" } }
+	elseif dtstart.precision == ic.DatePrecision.DateTime then
+		local dtstart_date_str = os.date("%Y%m%dT%H%M%S", dtstart.timestamp)
+		local tzid = state.tzid
+		assert(tzid, "Cannot write timezone-specific datetime without tzid")
+		---@cast dtstart_date_str string
+		changes["DTSTART"] = { value = dtstart_date_str, opts = { TZID = tzid } }
+	else
+		error("Unhandled state of DTSTART property")
+	end
+
 	local due = vtodo.due
 	if not due then
 		changes["DUE"] = false
