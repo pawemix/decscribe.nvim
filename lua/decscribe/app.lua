@@ -222,7 +222,6 @@ end
 ---@field decsync_dir string
 ---@field collection_label decscribe.CollLabel
 ---@field list_collections_fn fun(ds_dir_path: string): decscribe.Collections
----@field read_buffer_params decscribe.ReadBufferParams
 
 ---@param state decscribe.State
 ---@param params decscribe.OpenBufferParams
@@ -285,8 +284,6 @@ function M.open_buffer(state, params)
 	if vim.api.nvim_get_current_buf() ~= state.main_buf_nr then
 		vim.api.nvim_set_current_buf(state.main_buf_nr)
 	end
-
-	M.read_buffer(state, params.read_buffer_params)
 end
 
 ---@class decscribe.ReadBufferParamsFP
