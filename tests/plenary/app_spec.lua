@@ -13,6 +13,17 @@ local eq = assert.are_same
 ---@return ical.ical_t
 local function to_ical(lines) return table.concat(lines, "\r\n") .. "\r\n" end
 
+---@param tasks table<ical.uid_t, { [1]: ical.vtodo_t, [2]: ical.ical_t }>
+---@return tasks.Tasks
+local function tasks_with(tasks)
+	---@type tasks.Tasks
+	local out = ts.Tasks:new()
+	for uid, task in pairs(tasks) do
+		out:add(uid, { uid = uid, vtodo = task[1], ical = task[2] })
+	end
+	return out
+end
+
 describe("read_buffer", function()
 	it("reads correctly a task with X-OC-HIDESUBTASKS ical prop", function()
 		-- given
@@ -63,6 +74,51 @@ describe("read_buffer", function()
 		})
 		-- then
 		eq({ "- [ ] 2024-04-15 !H something" }, actual_lines)
+	end)
+
+	it("reads a task with start date and due date", function()
+		-- given
+		local actual_lines = app.read_buffer({
+			lines = {},
+			tasks = ts.Tasks:new(),
+		}, {
+			icals = {
+				["1234"] = to_ical({
+					"BEGIN:VCALENDAR",
+					"BEGIN:VTODO",
+					"STATUS:NEEDS-ACTION",
+					"SUMMARY:something",
+					"DTSTART;VALUE=DATE:20240408",
+					"DUE;VALUE=DATE:20240415",
+					"END:VTODO",
+					"END:VCALENDAR",
+				}),
+			},
+		})
+
+		-- then
+		eq({ "- [ ] 2024-04-08..2024-04-15 something" }, actual_lines)
+	end)
+
+	it("reads a task with start datetime and due datetime", function()
+		local actual_lines = app.read_buffer({
+			lines = {},
+			tasks = ts.Tasks:new(),
+		}, {
+			icals = {
+				["1234"] = to_ical({
+					"BEGIN:VCALENDAR",
+					"BEGIN:VTODO",
+					"STATUS:NEEDS-ACTION",
+					"SUMMARY:something",
+					"DTSTART;TZID=Europe/Berlin:20240408T1215",
+					"DUE;TZID=Europe/Berlin:20240415T1530",
+					"END:VTODO",
+					"END:VCALENDAR",
+				}),
+			},
+		})
+		eq({ "- [ ] 2024-04-08 12:15..2024-04-15 15:30 something" }, actual_lines)
 	end)
 end)
 
@@ -432,6 +488,443 @@ describe("write_buffer", function()
 			"SUMMARY:something",
 			"DUE;TZID=America/Chicago:" .. new_due_ical,
 			"END:VTODO",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("creates with a dtstart date", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		-- when
+		local actual = app.write_buffer({
+			lines = {},
+			tasks = tasks_with({}),
+		}, {
+			new_lines = { "- [ ] 2024-04-08.. something" },
+			seed = 42,
+			fresh_timestamp = 1709300000,
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VTODO",
+			"PRODID:decscribe",
+			"DTSTAMP:20240301T133320Z",
+			"UID:0089557217859255184",
+			"CREATED:20240301T133320Z",
+			"LAST-MODIFIED:20240301T133320Z",
+			"SUMMARY:something",
+			"PRIORITY:0",
+			"STATUS:NEEDS-ACTION",
+			"CATEGORIES:",
+			"COMPLETED:20240301T133320Z",
+			"PERCENT-COMPLETE:0",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart date insert", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] something"
+		---@type ical.vtodo_t
+		local vtodo = { completed = false, summary = "something" }
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] 2024-04-08.. something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart date update", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08.. something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+			dtstart = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
+			},
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] 2024-04-16.. something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;VALUE=DATE:20240416",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart date removal", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08.. something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+			dtstart = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
+			},
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("creates with a dtstart-due date range", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		-- when
+		local actual = app.write_buffer({
+			lines = {},
+			tasks = tasks_with({}),
+		}, {
+			new_lines = { "- [ ] 2024-04-08..2024-04-15 something" },
+			seed = 42,
+			fresh_timestamp = 1709300000,
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VTODO",
+			"PRODID:decscribe",
+			"DTSTAMP:20240301T133320Z",
+			"UID:0089557217859255184",
+			"CREATED:20240301T133320Z",
+			"LAST-MODIFIED:20240301T133320Z",
+			"SUMMARY:something",
+			"PRIORITY:0",
+			"STATUS:NEEDS-ACTION",
+			"CATEGORIES:",
+			"COMPLETED:20240301T133320Z",
+			"PERCENT-COMPLETE:0",
+			"DUE;VALUE=DATE:20240415",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	-- FIXME: randomly fails with DTSTART swapped with DUE
+	it("updates with a dtstart-due date range insert", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] something"
+		---@type ical.vtodo_t
+		local vtodo = { completed = false, summary = "something" }
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] 2024-04-08..2024-04-15 something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;VALUE=DATE:20240408",
+			"DUE;VALUE=DATE:20240415",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart-due date range update", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08..2024-04-15 something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+			dtstart = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
+			},
+			due = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+			},
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;VALUE=DATE:20240415",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] 2024-04-10..2024-04-15 something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;VALUE=DATE:20240415",
+			"DTSTART;VALUE=DATE:20240410",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart-due date range removal", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08..2024-04-15 something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+			dtstart = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
+			},
+			due = {
+				precision = ic.DatePrecision.Date,
+				timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+			},
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DUE;VALUE=DATE:20240415",
+			"DTSTART;VALUE=DATE:20240408",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+		}, {
+			new_lines = { "- [ ] something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart-due datetime range insert", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+			tzid = "Europe/Berlin",
+		}, {
+			new_lines = { "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;TZID=Europe/Berlin:20240408T121500",
+			"DUE;TZID=Europe/Berlin:20240415T152000",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart-due datetime range update", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;TZID=Europe/Berlin:20240408T121500",
+			"DUE;TZID=Europe/Berlin:20240415T152000",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+			tzid = "Europe/Berlin",
+		}, {
+			new_lines = { "- [ ] 2024-04-10 13:00..2024-04-15 15:20 something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;TZID=Europe/Berlin:20240410T130000",
+			"DUE;TZID=Europe/Berlin:20240415T152000",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		eq({ [uid] = new_ical }, actual.changes)
+	end)
+
+	it("updates with a dtstart-due datetime range removal", function()
+		-- given
+		local uid = ic.generate_uid({}, 42)
+		local line = "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something"
+		---@type ical.vtodo_t
+		local vtodo = {
+			completed = false,
+			summary = "something",
+		}
+		local ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"DTSTART;TZID=Europe/Berlin:20240408T121500",
+			"DUE;TZID=Europe/Berlin:20240415T152000",
+			"END:VTODO",
+			"END:VCALENDAR",
+		})
+		-- when
+		local actual = app.write_buffer({
+			lines = { line },
+			tasks = tasks_with({ [uid] = { vtodo, ical } }),
+			tzid = "Europe/Berlin",
+		}, {
+			new_lines = { "- [ ] something" },
+		})
+		-- then
+		local new_ical = to_ical({
+			"BEGIN:VCALENDAR",
+			"BEGIN:VTODO",
+			"STATUS:NEEDS-ACTION",
+			"SUMMARY:something",
+			"END:VTODO",
+			"END:VCALENDAR",
 		})
 		eq({ [uid] = new_ical }, actual.changes)
 	end)
