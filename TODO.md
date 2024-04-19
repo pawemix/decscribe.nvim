@@ -34,9 +34,9 @@
 - [x] ical: if any generic Ical field is empty, remove the Ical entry altogether
 - [x] due datetimes
 - [x] app.lua: write_buffer: refactor to impureim sandwich for easier testing
+- [x] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
+- [x] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [ ] app.lua: read_buffer: refactor to impureim sandwich for easier testing
-- [ ] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
-- [ ] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [ ] subtasks
 - [ ] refactor ical struct to a map with a default sorting, instead of a list
 - [ ] consider `nvim_buf_attach` to continuously watch for buffer changes
