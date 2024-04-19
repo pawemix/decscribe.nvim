@@ -49,17 +49,17 @@ describe("read_buffer", function()
 		-- when
 		local actual_lines = app.read_buffer(state, {
 			icals = {
-					["1234"] = table.concat({
-						"BEGIN:CALENDAR",
-						"BEGIN:VTODO",
-						"PRIORITY:1",
-						"STATUS:NEEDS-ACTION",
-						"SUMMARY:something",
-						"DUE;VALUE=DATE:20240415",
-						"END:VTODO",
-						"END:CALENDAR",
-					}, "\r\n") .. "\r\n",
-				}
+				["1234"] = table.concat({
+					"BEGIN:CALENDAR",
+					"BEGIN:VTODO",
+					"PRIORITY:1",
+					"STATUS:NEEDS-ACTION",
+					"SUMMARY:something",
+					"DUE;VALUE=DATE:20240415",
+					"END:VTODO",
+					"END:CALENDAR",
+				}, "\r\n") .. "\r\n",
+			},
 		})
 		-- then
 		eq({ "- [ ] 2024-04-15 !H something" }, actual_lines)
