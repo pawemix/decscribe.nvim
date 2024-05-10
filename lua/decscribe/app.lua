@@ -28,7 +28,11 @@ function M.vtodo_comp_default(vtodo1, vtodo2)
 
 	local summary1 = vtodo1.summary or ""
 	local summary2 = vtodo2.summary or ""
-	return summary1 < summary2
+	if summary1 ~= summary2 then return summary1 < summary2 end
+
+	local cats1 = table.concat(vtodo1.categories or {}, ",")
+	local cats2 = table.concat(vtodo2.categories or {}, ",")
+	return cats1 < cats2
 end
 
 ---@param task1 tasks.Task
