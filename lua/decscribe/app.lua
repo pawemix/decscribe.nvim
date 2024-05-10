@@ -3,6 +3,11 @@ local ic = require("decscribe.ical")
 
 local M = {}
 
+---@class (exact) tasks.Task
+---@field uid ical.uid_t
+---@field vtodo ical.vtodo_t
+---@field ical ical.ical_t
+
 ---@type fun(a: ical.vtodo_t, b: ical.vtodo_t): boolean
 function M.vtodo_comp_default(vtodo1, vtodo2)
 	local completed1 = vtodo1.completed and 1 or 0
