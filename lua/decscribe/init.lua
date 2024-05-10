@@ -138,6 +138,12 @@ function M.setup(opts)
 			local new_lines = app.read_buffer(state, { icals = lds_retrieve_icals() })
 			nvim_buf_set_lines(0, -1, new_lines)
 			nvim_buf_set_opt("modified", false)
+			-- Use 2-spaced tabs, so that:
+			-- * indented blocks align nicely; and
+			-- * line parsing is simple (no need to interpret amount of spaces).
+			nvim_buf_set_opt("expandtab", false)
+			nvim_buf_set_opt("tabstop", 2)
+			nvim_buf_set_opt("shiftwidth", 2)
 		end,
 	})
 
