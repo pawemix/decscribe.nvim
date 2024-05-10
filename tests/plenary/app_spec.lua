@@ -1,5 +1,4 @@
 local app = require("decscribe.app")
-local ts = require("decscribe.tasks")
 local ic = require("decscribe.ical")
 
 ---@diagnostic disable-next-line: undefined-global
@@ -9,6 +8,8 @@ local it = it
 ---@diagnostic disable-next-line: undefined-field
 local eq = assert.are_same
 
+local comp_fn = app.vtodo_comp_default
+
 ---@param lines string[]
 ---@return ical.ical_t
 local function to_ical(lines) return table.concat(lines, "\r\n") .. "\r\n" end
@@ -16,10 +17,9 @@ local function to_ical(lines) return table.concat(lines, "\r\n") .. "\r\n" end
 ---@param tasks table<ical.uid_t, { [1]: ical.vtodo_t, [2]: ical.ical_t }>
 ---@return tasks.Tasks
 local function tasks_with(tasks)
-	---@type tasks.Tasks
-	local out = ts.Tasks:new()
+	local out = {}
 	for uid, task in pairs(tasks) do
-		out:add(uid, { uid = uid, vtodo = task[1], ical = task[2] })
+		out[uid] = { uid = uid, vtodo = task[1], ical = task[2] }
 	end
 	return out
 end
@@ -28,10 +28,7 @@ describe("read_buffer", function()
 	it("reads correctly a task with X-OC-HIDESUBTASKS ical prop", function()
 		-- given
 		---@type decscribe.State
-		local state = {
-			lines = {},
-			tasks = ts.Tasks:new(),
-		}
+		local state = { lines = {}, tasks = {} }
 		-- when
 		local actual_lines = app.read_buffer(state, {
 			icals = {
@@ -46,6 +43,7 @@ describe("read_buffer", function()
 					"END:CALENDAR",
 				}, "\r\n"),
 			},
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		eq({ "- [x] !H something" }, actual_lines)
@@ -55,7 +53,7 @@ describe("read_buffer", function()
 		-- given
 		local state = {
 			lines = {},
-			tasks = ts.Tasks:new(),
+			tasks = {},
 		}
 		-- when
 		local actual_lines = app.read_buffer(state, {
@@ -71,6 +69,7 @@ describe("read_buffer", function()
 					"END:CALENDAR",
 				}, "\r\n") .. "\r\n",
 			},
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		eq({ "- [ ] 2024-04-15 !H something" }, actual_lines)
@@ -80,7 +79,7 @@ describe("read_buffer", function()
 		-- given
 		local actual_lines = app.read_buffer({
 			lines = {},
-			tasks = ts.Tasks:new(),
+			tasks = {},
 		}, {
 			icals = {
 				["1234"] = to_ical({
@@ -94,6 +93,7 @@ describe("read_buffer", function()
 					"END:VCALENDAR",
 				}),
 			},
+			vtodo_comp = comp_fn,
 		})
 
 		-- then
@@ -103,7 +103,7 @@ describe("read_buffer", function()
 	it("reads a task with start datetime and due datetime", function()
 		local actual_lines = app.read_buffer({
 			lines = {},
-			tasks = ts.Tasks:new(),
+			tasks = {},
 		}, {
 			icals = {
 				["1234"] = to_ical({
@@ -117,6 +117,7 @@ describe("read_buffer", function()
 					"END:VCALENDAR",
 				}),
 			},
+			vtodo_comp = comp_fn,
 		})
 		eq({ "- [ ] 2024-04-08 12:15..2024-04-15 15:30 something" }, actual_lines)
 	end)
@@ -152,11 +153,12 @@ describe("write_buffer", function()
 			ical,
 			app.write_buffer({
 				lines = {},
-				tasks = ts.Tasks:new(),
+				tasks = {},
 			}, {
 				new_lines = { "- [ ] first task" },
 				fresh_timestamp = created.stamp,
 				seed = seed,
+				vtodo_comp = comp_fn,
 			}).changes[uid]
 		)
 	end)
@@ -165,22 +167,23 @@ describe("write_buffer", function()
 		-- given
 		local state = {
 			lines = { "- [ ] something" },
-			tasks = ts.Tasks:new(),
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					vtodo = { completed = false, summary = "something" },
+					ical = to_ical({
+						"BEGIN:VTODO",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"END:VTODO",
+					}),
+				},
+			},
 		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			vtodo = { completed = false, summary = "something" },
-			ical = to_ical({
-				"BEGIN:VTODO",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"END:VTODO",
-			}),
-		})
 		-- when & then
 		eq(
 			{ ["1234"] = false },
-			app.write_buffer(state, { new_lines = {} }).changes
+			app.write_buffer(state, { new_lines = {}, vtodo_comp = comp_fn }).changes
 		)
 	end)
 
@@ -189,28 +192,30 @@ describe("write_buffer", function()
 		---@type decscribe.State
 		local state = {
 			lines = { "- [ ] !H something" },
-			tasks = ts.Tasks:new(),
-		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			ical = table.concat({
-				"BEGIN:CALENDAR",
-				"BEGIN:VTODO",
-				"PRIORITY:1",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"END:VTODO",
-				"END:CALENDAR",
-			}, "\r\n") .. "\r\n",
-			vtodo = {
-				summary = "something",
-				completed = false,
-				priority = ic.priority_t.tasks_org_high,
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					ical = table.concat({
+						"BEGIN:CALENDAR",
+						"BEGIN:VTODO",
+						"PRIORITY:1",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"END:VTODO",
+						"END:CALENDAR",
+					}, "\r\n") .. "\r\n",
+					vtodo = {
+						summary = "something",
+						completed = false,
+						priority = ic.priority_t.tasks_org_high,
+					},
+				},
 			},
-		})
+		}
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] 2024-04-12 !H something" },
+			vtodo_comp = comp_fn,
 		})
 		eq(
 			to_ical({
@@ -232,33 +237,35 @@ describe("write_buffer", function()
 		---@type decscribe.State
 		local state = {
 			lines = { "- [ ] 2024-04-15 !H something" },
-			tasks = ts.Tasks:new(),
-		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			ical = table.concat({
-				"BEGIN:CALENDAR",
-				"BEGIN:VTODO",
-				"PRIORITY:1",
-				"DUE;VALUE=DATE:20240415",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"END:VTODO",
-				"END:CALENDAR",
-			}, "\r\n") .. "\r\n",
-			vtodo = {
-				summary = "something",
-				completed = false,
-				priority = ic.priority_t.tasks_org_high,
-				due = {
-					precision = ic.DatePrecision.Date,
-					timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					ical = table.concat({
+						"BEGIN:CALENDAR",
+						"BEGIN:VTODO",
+						"PRIORITY:1",
+						"DUE;VALUE=DATE:20240415",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"END:VTODO",
+						"END:CALENDAR",
+					}, "\r\n") .. "\r\n",
+					vtodo = {
+						summary = "something",
+						completed = false,
+						priority = ic.priority_t.tasks_org_high,
+						due = {
+							precision = ic.DatePrecision.Date,
+							timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+						},
+					},
 				},
 			},
-		})
+		}
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] 2024-04-18 !H something" },
+			vtodo_comp = comp_fn,
 		})
 		eq(
 			to_ical({
@@ -280,33 +287,35 @@ describe("write_buffer", function()
 		---@type decscribe.State
 		local state = {
 			lines = { "- [ ] 2024-04-15 !H something" },
-			tasks = ts.Tasks:new(),
-		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			ical = table.concat({
-				"BEGIN:CALENDAR",
-				"BEGIN:VTODO",
-				"PRIORITY:1",
-				"DUE;VALUE=DATE:20240415",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"END:VTODO",
-				"END:CALENDAR",
-			}, "\r\n") .. "\r\n",
-			vtodo = {
-				summary = "something",
-				completed = false,
-				priority = ic.priority_t.tasks_org_high,
-				due = {
-					precision = ic.DatePrecision.Date,
-					timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					ical = table.concat({
+						"BEGIN:CALENDAR",
+						"BEGIN:VTODO",
+						"PRIORITY:1",
+						"DUE;VALUE=DATE:20240415",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"END:VTODO",
+						"END:CALENDAR",
+					}, "\r\n") .. "\r\n",
+					vtodo = {
+						summary = "something",
+						completed = false,
+						priority = ic.priority_t.tasks_org_high,
+						due = {
+							precision = ic.DatePrecision.Date,
+							timestamp = os.time({ year = 2024, month = 04, day = 15 }),
+						},
+					},
 				},
 			},
-		})
+		}
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] !H something" },
+			vtodo_comp = comp_fn,
 		})
 		eq(
 			to_ical({
@@ -327,28 +336,30 @@ describe("write_buffer", function()
 		---@type decscribe.State
 		local state = {
 			lines = { "- [ ] :first: :second: something" },
-			tasks = ts.Tasks:new(),
-		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			ical = table.concat({
-				"BEGIN:CALENDAR",
-				"BEGIN:VTODO",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"CATEGORIES:first,second",
-				"END:VTODO",
-				"END:CALENDAR",
-			}, "\r\n") .. "\r\n",
-			vtodo = {
-				summary = "something",
-				completed = false,
-				priority = ic.priority_t.tasks_org_high,
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					ical = table.concat({
+						"BEGIN:CALENDAR",
+						"BEGIN:VTODO",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"CATEGORIES:first,second",
+						"END:VTODO",
+						"END:CALENDAR",
+					}, "\r\n") .. "\r\n",
+					vtodo = {
+						summary = "something",
+						completed = false,
+						priority = ic.priority_t.tasks_org_high,
+					},
+				},
 			},
-		})
+		}
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] something" },
+			vtodo_comp = comp_fn,
 		})
 		eq(
 			to_ical({
@@ -369,26 +380,28 @@ describe("write_buffer", function()
 		local state = {
 			tzid = "America/Chicago",
 			lines = { "- [ ] something" },
-			tasks = ts.Tasks:new(),
-		}
-		state.tasks:add("1234", {
-			uid = "1234",
-			ical = table.concat({
-				"BEGIN:CALENDAR",
-				"BEGIN:VTODO",
-				"STATUS:NEEDS-ACTION",
-				"SUMMARY:something",
-				"END:VTODO",
-				"END:CALENDAR",
-			}, "\r\n") .. "\r\n",
-			vtodo = {
-				summary = "something",
-				completed = false,
+			tasks = {
+				["1234"] = {
+					uid = "1234",
+					ical = table.concat({
+						"BEGIN:CALENDAR",
+						"BEGIN:VTODO",
+						"STATUS:NEEDS-ACTION",
+						"SUMMARY:something",
+						"END:VTODO",
+						"END:CALENDAR",
+					}, "\r\n") .. "\r\n",
+					vtodo = {
+						summary = "something",
+						completed = false,
+					},
+				},
 			},
-		})
+		}
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] 2024-04-15 09:06 something" },
+			vtodo_comp = comp_fn,
 		})
 		eq(
 			to_ical({
@@ -410,7 +423,7 @@ describe("write_buffer", function()
 		local state = {
 			tzid = "America/Chicago",
 			lines = {},
-			tasks = ts.Tasks:new(),
+			tasks = {},
 		}
 		local new_due_md = "2023-07-12 06:34"
 		local new_due_ic = "20230712T063400"
@@ -440,6 +453,7 @@ describe("write_buffer", function()
 			new_lines = { "- [ ] " .. new_due_md .. " something" },
 			seed = 42,
 			fresh_timestamp = created_tstamp,
+			vtodo_comp = comp_fn,
 		})
 		eq({ [new_uid] = new_ical }, actual.changes)
 	end)
@@ -471,14 +485,16 @@ describe("write_buffer", function()
 		local state = {
 			tzid = "America/Chicago",
 			lines = { line },
-			tasks = ts.Tasks:new(),
+			tasks = {
+				[uid] = { uid = uid, vtodo = vtodo, ical = ical },
+			},
 		}
-		state.tasks:add(uid, { uid = uid, vtodo = vtodo, ical = ical })
 		-- when
 		local actual = app.write_buffer(state, {
 			new_lines = { "- [ ] 2024-04-15 16:09 something" },
 			seed = 42,
 			fresh_timestamp = created_tstamp,
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_due_ical = "20240415T160900"
@@ -503,6 +519,7 @@ describe("write_buffer", function()
 			new_lines = { "- [ ] 2024-04-08.. something" },
 			seed = 42,
 			fresh_timestamp = 1709300000,
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -547,6 +564,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] 2024-04-08.. something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -589,6 +607,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] 2024-04-16.. something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -631,6 +650,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -655,6 +675,7 @@ describe("write_buffer", function()
 			new_lines = { "- [ ] 2024-04-08..2024-04-15 something" },
 			seed = 42,
 			fresh_timestamp = 1709300000,
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -701,6 +722,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] 2024-04-08..2024-04-15 something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -749,6 +771,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] 2024-04-10..2024-04-15 something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -797,6 +820,7 @@ describe("write_buffer", function()
 			tasks = tasks_with({ [uid] = { vtodo, ical } }),
 		}, {
 			new_lines = { "- [ ] something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -834,6 +858,7 @@ describe("write_buffer", function()
 			tzid = "Europe/Berlin",
 		}, {
 			new_lines = { "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -875,6 +900,7 @@ describe("write_buffer", function()
 			tzid = "Europe/Berlin",
 		}, {
 			new_lines = { "- [ ] 2024-04-10 13:00..2024-04-15 15:20 something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
@@ -916,6 +942,7 @@ describe("write_buffer", function()
 			tzid = "Europe/Berlin",
 		}, {
 			new_lines = { "- [ ] something" },
+			vtodo_comp = comp_fn,
 		})
 		-- then
 		local new_ical = to_ical({
