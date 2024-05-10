@@ -1,5 +1,5 @@
+local mc = require("decscribe.mixcoll")
 local ic = require("decscribe.ical")
-local ts = require("decscribe.tasks")
 
 local M = {}
 
@@ -40,7 +40,7 @@ end
 
 ---@class (exact) decscribe.State
 ---@field main_buf_nr integer?
----@field tasks tasks.Tasks
+---@field tasks decscribe.mixcoll.MixColl<ical.uid_t, tasks.Task>
 ---@field lines string[]
 ---@field curr_coll_id string?
 ---@field decsync_dir string?
@@ -50,10 +50,13 @@ end
 ---may break unless properly handled.
 ---@param state decscribe.State
 ---@param idx integer
----@param params decscribe.WriteBufferParams
 ---@return ical.uid_t to_be_removed
-local function on_line_removed(state, idx, params)
-	local deleted_task = state.tasks:delete_at(idx)
+local function on_line_removed(state, idx)
+	---@param task tasks.Task
+	---@return ical.uid_t
+	local function id_fn(task) return task.uid end
+	local deleted_task =
+		mc.delete_at(state.tasks, idx, id_fn, M.task_comp_default)
 	assert(
 		deleted_task,
 		"Tried deleting task at index " .. idx .. "but there was nothing there"
@@ -71,7 +74,11 @@ end
 ---@return ical.ical_t added_task_ical
 local function on_line_added(state, idx, line, params)
 	params = params or {}
-	local uid = ic.generate_uid(state.tasks:uids(), params.seed)
+	local uids = {}
+	for _, task in pairs(state.tasks) do
+		uids[task.uid] = true
+	end
+	local uid = ic.generate_uid(vim.tbl_keys(uids), params.seed)
 	local vtodo = ic.parse_md_line(line)
 	-- TODO: add a diagnostic to the line
 	assert(vtodo, "Invalid line while adding new entry")
@@ -87,17 +94,16 @@ local function on_line_added(state, idx, line, params)
 		vtodo = vtodo,
 		ical = ical,
 	}
-	state.tasks:add_at(idx, todo)
+	mc.post_at(state.tasks, idx, todo)
 	return uid, ical
 end
 
 ---@param state decscribe.State
 ---@param idx integer
 ---@param new_line string
----@param params decscribe.WriteBufferParams
 ---@return ical.uid_t?, ical.ical_t?
-local function on_line_changed(state, idx, new_line, params)
-	local changed_todo = state.tasks:get_at(idx)
+local function on_line_changed(state, idx, new_line)
+	local changed_todo = mc.get_at(state.tasks, idx, M.task_comp_default)
 	assert(
 		changed_todo,
 		"Expected an existing task at " .. idx .. " but found nothing"
@@ -113,7 +119,7 @@ local function on_line_changed(state, idx, new_line, params)
 	new_vtodo.parent_uid = new_vtodo.parent_uid or changed_todo.vtodo.parent_uid
 	changed_todo.vtodo = new_vtodo
 
-	state.tasks:update_at(idx, changed_todo.vtodo)
+	mc.put_at(state.tasks, idx, changed_todo)
 	local uid = changed_todo.uid
 	local ical = changed_todo.ical
 	local vtodo = changed_todo.vtodo
@@ -325,7 +331,7 @@ end
 function M.read_buffer(state, params)
 	-- tasklist has to be recreated from scratch, so that there are no leftovers,
 	-- e.g. from a different collection/dsdir
-	state.tasks = ts.Tasks:new()
+	state.tasks = {}
 
 	local uid_to_icals = params.icals
 
@@ -341,11 +347,11 @@ function M.read_buffer(state, params)
 			collection = state.curr_coll_id,
 		}
 
-		state.tasks:add(todo_uid, todo)
+		state.tasks[todo_uid] = todo
 	end
 
 	state.lines = {}
-	for _, task in ipairs(state.tasks:to_list()) do
+	for _, task in ipairs(mc.to_sorted_list(state.tasks, M.task_comp_default)) do
 		local line = ic.to_md_line(task.vtodo)
 		if line then table.insert(state.lines, line) end
 	end
@@ -419,7 +425,7 @@ function M.write_buffer(state, params)
 			assert(count > 0, "decscribe: diff count in this hunk cannot be 0")
 			for idx = start, start + count - 1 do
 				local new_line = new_contents[idx]
-				local new_uid, new_ical = on_line_changed(state, idx, new_line, params)
+				local new_uid, new_ical = on_line_changed(state, idx, new_line)
 				if new_uid and new_ical then
 					assert(
 						not out.changes[new_uid],
@@ -440,7 +446,7 @@ function M.write_buffer(state, params)
 	for _, change in ipairs(lines_to_affect) do
 		local idx = change.idx
 		if change.line == nil then
-			local removed_uid = on_line_removed(state, idx, params)
+			local removed_uid = on_line_removed(state, idx)
 			assert(type(removed_uid) == "string")
 			out.changes[removed_uid] = false
 		else

@@ -1,5 +1,4 @@
 local lds = require("decscribe.libdecsync")
-local ts = require("decscribe.tasks")
 local app = require("decscribe.app")
 
 local M = {}
@@ -21,7 +20,7 @@ local APP_NAME = "decscribe"
 ---@type decscribe.State
 local state = {
 	main_buf_nr = nil,
-	tasks = ts.Tasks:new(),
+	tasks = {},
 	lines = {},
 	curr_coll_id = nil,
 	decsync_dir = nil,
