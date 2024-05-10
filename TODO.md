@@ -37,7 +37,14 @@
 - [x] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
 - [x] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [x] app.lua: read_buffer: refactor to impureim sandwich for easier testing
+- [x] refactor Tasks class to simple functions on a simple struct -> collections.lua
 - [ ] subtasks
+- [ ] description
+- [ ] refactor to make writing tests less of a chore?
+    - [ ] split app into data-format-agnostic core and two mappers (`read`er (parser) and `show`er) - ICal & Markdown
+    - such that adding new fields to the whole app is like tweaking a declarative configuration passed into these mappers; the unit tests shall only test the generic part
+- [ ] calculate hash of each task to identify which tasks were just moved around the file, to avoid unnecessary creations + removals
+- [ ] if non-decsync-dir and/or non-collection given, create it
 - [ ] refactor ical struct to a map with a default sorting, instead of a list
 - [ ] consider `nvim_buf_attach` to continuously watch for buffer changes
 - [ ] handle complex hunks (mix of changes and removals/additions)
