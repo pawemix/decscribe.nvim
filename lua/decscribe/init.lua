@@ -75,7 +75,7 @@ local function lds_retrieve_icals()
 	local uid_to_ical = {}
 	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
 		assert(#path == 1, "Unexpected path length while reading updated entry")
-		---@type ical.uid_t
+		---@type decscribe.ical.Uid
 		---@diagnostic disable-next-line: assign-type-mismatch
 		local todo_uid = path[1]
 		if value == "null" then

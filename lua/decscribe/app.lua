@@ -1,14 +1,15 @@
 local mc = require("decscribe.mixcoll")
 local ic = require("decscribe.ical")
+local dt = require("decscribe.date")
 
 local M = {}
 
 ---@class (exact) tasks.Task
----@field uid ical.uid_t
----@field vtodo ical.vtodo_t
----@field ical ical.ical_t
+---@field uid decscribe.ical.Uid
+---@field vtodo decscribe.ical.Vtodo
+---@field ical decscribe.ical.String
 
----@type fun(a: ical.vtodo_t, b: ical.vtodo_t): boolean
+---@type fun(a: decscribe.ical.Vtodo, b: decscribe.ical.Vtodo): boolean
 function M.vtodo_comp_default(vtodo1, vtodo2)
 	local completed1 = vtodo1.completed and 1 or 0
 	local completed2 = vtodo2.completed and 1 or 0
@@ -49,7 +50,7 @@ end
 
 ---@class (exact) decscribe.State
 ---@field main_buf_nr integer?
----@field tasks decscribe.mixcoll.MixColl<ical.uid_t, tasks.Task>
+---@field tasks decscribe.mixcoll.MixColl<decscribe.ical.Uid, tasks.Task>
 ---@field lines string[]
 ---@field curr_coll_id string?
 ---@field decsync_dir string?
@@ -59,10 +60,10 @@ end
 ---may break unless properly handled.
 ---@param state decscribe.State
 ---@param idx integer
----@return ical.uid_t to_be_removed
+---@return decscribe.ical.Uid to_be_removed
 local function on_line_removed(state, idx)
 	---@param task tasks.Task
-	---@return ical.uid_t
+	---@return decscribe.ical.Uid
 	local function id_fn(task) return task.uid end
 	local deleted_task =
 		mc.delete_at(state.tasks, idx, id_fn, M.task_comp_default)
@@ -79,8 +80,8 @@ end
 ---@param idx integer
 ---@param line string
 ---@param params decscribe.WriteBufferParams
----@return ical.uid_t added_task_uid
----@return ical.ical_t added_task_ical
+---@return decscribe.ical.Uid added_task_uid
+---@return decscribe.ical.String added_task_ical
 local function on_line_added(state, idx, line, params)
 	params = params or {}
 	local uids = {}
@@ -110,7 +111,7 @@ end
 ---@param state decscribe.State
 ---@param idx integer
 ---@param new_line string
----@return ical.uid_t?, ical.ical_t?
+---@return decscribe.ical.Uid?, decscribe.ical.String?
 local function on_line_changed(state, idx, new_line)
 	local changed_todo = mc.get_at(state.tasks, idx, M.task_comp_default)
 	assert(
@@ -135,7 +136,7 @@ local function on_line_changed(state, idx, new_line)
 
 	-- TODO: what if as a user I e.g. write into my description "STATUS:NEEDS-ACTION" string? will I inject metadata into the iCal?
 
-	---@type table<string, string|false|{ opts: decscribe.ical.IcalOptions, value: string}>
+	---@type table<string, string|false|{ opts: decscribe.ical.Options, value: string}>
 	---a dict on what fields to change; if value is a string, the field should be
 	---updated to that; if it's `false`, the field should be removed if present
 	local changes = {}
@@ -161,7 +162,7 @@ local function on_line_changed(state, idx, new_line)
 	end
 
 	local priority = vtodo.priority
-	if not priority or priority == ic.priority_t.undefined then
+	if not priority or priority == ic.Priority.undefined then
 		changes["PRIORITY"] = false
 	else
 		changes["PRIORITY"] = tostring(priority)
@@ -176,11 +177,11 @@ local function on_line_changed(state, idx, new_line)
 	local dtstart = vtodo.dtstart
 	if not dtstart then
 		changes["DTSTART"] = false
-	elseif dtstart.precision == ic.DatePrecision.Date then
+	elseif dtstart.precision == dt.Precision.Date then
 		local dtstart_date_str = os.date("%Y%m%d", dtstart.timestamp)
 		---@cast dtstart_date_str string
 		changes["DTSTART"] = { value = dtstart_date_str, opts = { VALUE = "DATE" } }
-	elseif dtstart.precision == ic.DatePrecision.DateTime then
+	elseif dtstart.precision == dt.Precision.DateTime then
 		local dtstart_date_str = os.date("%Y%m%dT%H%M%S", dtstart.timestamp)
 		local tzid = state.tzid
 		assert(tzid, "Cannot write timezone-specific datetime without tzid")
@@ -193,11 +194,11 @@ local function on_line_changed(state, idx, new_line)
 	local due = vtodo.due
 	if not due then
 		changes["DUE"] = false
-	elseif due.precision == ic.DatePrecision.Date then
+	elseif due.precision == dt.Precision.Date then
 		local due_date_str = os.date("%Y%m%d", vtodo.due.timestamp)
 		---@cast due_date_str string
 		changes["DUE"] = { value = due_date_str, opts = { VALUE = "DATE" } }
-	elseif due.precision == ic.DatePrecision.DateTime then
+	elseif due.precision == dt.Precision.DateTime then
 		local due_date_str = os.date("%Y%m%dT%H%M%S", due.timestamp)
 		local tzid = state.tzid
 		assert(tzid, "Cannot write timezone-specific datetime without tzid")
@@ -243,7 +244,7 @@ local function on_line_changed(state, idx, new_line)
 	for i, entry in ipairs(ical_entries) do
 		if entry.key == "END" and entry.value == "VTODO" then
 			for key, change in pairs(changes) do
-				---@type decscribe.ical.IcalEntry?
+				---@type decscribe.ical.Entry?
 				local new_entry = nil
 				if type(change) == "string" then
 					new_entry = { key = key, value = change }
@@ -332,7 +333,7 @@ function M.open_buffer(state, params)
 end
 
 ---@class decscribe.ReadBufferParams
----@field icals table<ical.uid_t, ical.ical_t>
+---@field icals table<decscribe.ical.Uid, decscribe.ical.String>
 
 ---@param state decscribe.State
 ---@param params decscribe.ReadBufferParams
@@ -345,7 +346,7 @@ function M.read_buffer(state, params)
 	local uid_to_icals = params.icals
 
 	for todo_uid, todo_ical in pairs(uid_to_icals) do
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = ic.vtodo_from_ical(todo_ical)
 
 		---@type tasks.Task
@@ -374,7 +375,7 @@ end
 ---@field seed? integer used for random operations
 
 ---@class (exact) decscribe.WriteBufferOutcome
----@field changes table<ical.uid_t, ical.ical_t|false>
+---@field changes table<decscribe.ical.Uid, decscribe.ical.String|false>
 
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams

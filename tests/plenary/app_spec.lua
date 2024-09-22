@@ -1,5 +1,6 @@
 local app = require("decscribe.app")
 local ic = require("decscribe.ical")
+local dt = require("decscribe.date")
 
 ---@diagnostic disable-next-line: undefined-global
 local describe = describe
@@ -11,10 +12,10 @@ local eq = assert.are_same
 local comp_fn = app.vtodo_comp_default
 
 ---@param lines string[]
----@return ical.ical_t
+---@return decscribe.ical.String
 local function to_ical(lines) return table.concat(lines, "\r\n") .. "\r\n" end
 
----@param tasks table<ical.uid_t, { [1]: ical.vtodo_t, [2]: ical.ical_t }>
+---@param tasks table<decscribe.ical.Uid, { [1]: decscribe.ical.Vtodo, [2]: decscribe.ical.String }>
 ---@return tasks.Tasks
 local function tasks_with(tasks)
 	local out = {}
@@ -207,7 +208,7 @@ describe("write_buffer", function()
 					vtodo = {
 						summary = "something",
 						completed = false,
-						priority = ic.priority_t.tasks_org_high,
+						priority = ic.Priority.tasks_org_high,
 					},
 				},
 			},
@@ -253,9 +254,9 @@ describe("write_buffer", function()
 					vtodo = {
 						summary = "something",
 						completed = false,
-						priority = ic.priority_t.tasks_org_high,
+						priority = ic.Priority.tasks_org_high,
 						due = {
-							precision = ic.DatePrecision.Date,
+							precision = dt.Precision.Date,
 							timestamp = os.time({ year = 2024, month = 04, day = 15 }),
 						},
 					},
@@ -303,9 +304,9 @@ describe("write_buffer", function()
 					vtodo = {
 						summary = "something",
 						completed = false,
-						priority = ic.priority_t.tasks_org_high,
+						priority = ic.Priority.tasks_org_high,
 						due = {
-							precision = ic.DatePrecision.Date,
+							precision = dt.Precision.Date,
 							timestamp = os.time({ year = 2024, month = 04, day = 15 }),
 						},
 					},
@@ -351,7 +352,7 @@ describe("write_buffer", function()
 					vtodo = {
 						summary = "something",
 						completed = false,
-						priority = ic.priority_t.tasks_org_high,
+						priority = ic.Priority.tasks_org_high,
 					},
 				},
 			},
@@ -466,11 +467,11 @@ describe("write_buffer", function()
 		local due_ical = "20190420T153400"
 		local created_tstamp = 1555774466
 		local line = "- [ ] " .. due_md .. " something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			due = {
-				precision = ic.DatePrecision.DateTime,
+				precision = dt.Precision.DateTime,
 				timestamp = due_tstamp,
 			},
 		}
@@ -548,7 +549,7 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = { completed = false, summary = "something" }
 		local ical = to_ical({
 			"BEGIN:VCALENDAR",
@@ -583,12 +584,12 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08.. something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
 			dtstart = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
 			},
 		}
@@ -626,12 +627,12 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08.. something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
 			dtstart = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
 			},
 		}
@@ -706,7 +707,7 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = { completed = false, summary = "something" }
 		local ical = to_ical({
 			"BEGIN:VCALENDAR",
@@ -742,16 +743,16 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08..2024-04-15 something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
 			dtstart = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
 			},
 			due = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 15 }),
 			},
 		}
@@ -791,16 +792,16 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08..2024-04-15 something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
 			dtstart = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 08 }),
 			},
 			due = {
-				precision = ic.DatePrecision.Date,
+				precision = dt.Precision.Date,
 				timestamp = os.time({ year = 2024, month = 04, day = 15 }),
 			},
 		}
@@ -838,7 +839,7 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
@@ -878,7 +879,7 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",
@@ -920,7 +921,7 @@ describe("write_buffer", function()
 		-- given
 		local uid = ic.generate_uid({}, 42)
 		local line = "- [ ] 2024-04-08 12:15..2024-04-15 15:20 something"
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local vtodo = {
 			completed = false,
 			summary = "something",

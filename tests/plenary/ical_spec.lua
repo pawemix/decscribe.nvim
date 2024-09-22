@@ -1,6 +1,7 @@
 ---@diagnostic disable: undefined-field, undefined-global
 
 local ic = require("decscribe.ical")
+local dt = require("decscribe.date")
 
 ---Like `assert.are_same`, but consider only keys present in both tables.
 ---@param expected table
@@ -135,9 +136,9 @@ describe("parse_md_line", function()
 	end
 
 	for char, num in pairs({
-		H = ic.priority_t.tasks_org_high,
-		M = ic.priority_t.tasks_org_medium,
-		L = ic.priority_t.tasks_org_low,
+		H = ic.Priority.tasks_org_high,
+		M = ic.Priority.tasks_org_medium,
+		L = ic.Priority.tasks_org_low,
 	}) do
 		it("recognizes priority with a letter", function()
 			local line = ("- [ ] !%s something"):format(char)
@@ -157,10 +158,10 @@ describe("parse_md_line", function()
 			month = 6,
 			day = 15,
 		})
-		---@type ical.vtodo_t
+		---@type decscribe.ical.Vtodo
 		local expected = {
 			completed = false,
-			due = { timestamp = expected_ts, precision = ic.DatePrecision.Date },
+			due = { timestamp = expected_ts, precision = dt.Precision.Date },
 			summary = "something with a deadline",
 		}
 		ieq(expected, ic.parse_md_line(line) or {})

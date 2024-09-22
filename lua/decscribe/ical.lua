@@ -1,39 +1,27 @@
+local dt = require("decscribe.date")
+
 local M = {}
 
----@alias ical.uid_t string
+---@alias decscribe.ical.Uid string
+---@alias decscribe.ical.String string
+---@alias decscribe.ical.Options { [string]: string }
 
----@alias ical.ical_t string
+---@class decscribe.ical.Entry
+---@field key string
+---@field value string
+---@field opts? decscribe.ical.Options
 
----@enum ical.DatePrecision
-M.DatePrecision = {
-	Date = "DATE",
-	DateTime = "DATETIME",
-}
+---@alias decscribe.ical.Document decscribe.ical.Entry[]
 
----@alias ical.Timestamp integer seconds since the epoch, as returned by os.time
-
----@class (exact) ical.Date
----@field timestamp ical.Timestamp
----@field precision ical.DatePrecision
-
----@class (exact) ical.vtodo_t
+---@class (exact) decscribe.ical.Vtodo
 ---@field summary string?
 ---@field description string?
 ---@field completed boolean
 ---@field priority number?
 ---@field categories string[]?
----@field parent_uid ical.uid_t?
----@field due ical.Date?
----@field dtstart ical.Date?
-local vtodo_t = {}
-
----@alias decscribe.ical.Ical decscribe.ical.IcalEntry[]
----@alias decscribe.ical.IcalOptions table<string, string>
-
----@class decscribe.ical.IcalEntry
----@field key string
----@field value string
----@field opts? decscribe.ical.IcalOptions
+---@field parent_uid decscribe.ical.Uid?
+---@field due decscribe.date.Date?
+---@field dtstart decscribe.date.Date?
 
 local ICAL_PROP_NAMES = {
 	-- TODO: insert BEGIN:VCALENDAR
@@ -59,8 +47,8 @@ local ICAL_PROP_NAMES = {
 	-- TODO: insert END:VCALENDAR
 }
 
----@enum ical.priority_t
-M.priority_t = {
+---@enum decscribe.ical.Priority
+M.Priority = {
 	undefined = 0,
 	tasks_org_high = 1,
 	tasks_org_medium = 5,
@@ -69,12 +57,12 @@ M.priority_t = {
 }
 
 M.labelled_priorities = vim.tbl_add_reverse_lookup({
-	H = M.priority_t.tasks_org_high,
-	M = M.priority_t.tasks_org_medium,
-	L = M.priority_t.tasks_org_low,
+	H = M.Priority.tasks_org_high,
+	M = M.Priority.tasks_org_medium,
+	L = M.Priority.tasks_org_low,
 })
 
---- priority_t:
+--- Priority:
 --- 0 = undefined
 --- 1 = highest
 --- (1-4 = CUA "HIGH")
@@ -87,9 +75,9 @@ local UID_LENGTH = 19
 local UID_FORMAT = "%0" .. UID_LENGTH .. "d"
 local UID_MAX = math.pow(10, UID_LENGTH) - 1
 
----@param uids ical.uid_t[]
+---@param uids decscribe.ical.Uid[]
 ---@param seed number?
----@return ical.uid_t
+---@return decscribe.ical.Uid
 function M.generate_uid(uids, seed)
 	math.randomseed(seed or os.clock() * 1000000)
 	while true do
@@ -106,15 +94,15 @@ end
 ---@field fresh_timestamp? integer used for "created at" properties etc.
 ---@field tzid? string time zone id
 
----@param uid ical.uid_t
----@param vtodo ical.vtodo_t
+---@param uid decscribe.ical.Uid
+---@param vtodo decscribe.ical.Vtodo
 ---@param params? ical.CreateIcalVtodo.Params
----@return ical.ical_t
+---@return decscribe.ical.String
 function M.create_ical_vtodo(uid, vtodo, params)
 	params = params or {}
 	local created_stamp = os.date("!%Y%m%dT%H%M%SZ", params.fresh_timestamp)
 
-	local priority = vtodo.priority or M.priority_t.undefined
+	local priority = vtodo.priority or M.Priority.undefined
 
 	local description = nil
 	if type(vtodo.description) == "string" then
@@ -138,9 +126,9 @@ function M.create_ical_vtodo(uid, vtodo, params)
 
 	local due_entry = nil
 	if vtodo.due then
-		if vtodo.due.precision == M.DatePrecision.Date then
+		if vtodo.due.precision == dt.Precision.Date then
 			due_entry = "DUE;VALUE=DATE:" .. os.date("%Y%m%d", vtodo.due.timestamp)
-		elseif vtodo.due.precision == M.DatePrecision.DateTime then
+		elseif vtodo.due.precision == dt.Precision.DateTime then
 			assert(params.tzid, "TZID required to print due date but not given")
 			local due_date_str = os.date("%Y%m%dT%H%M%S", vtodo.due.timestamp)
 			due_entry = "DUE;TZID=" .. params.tzid .. ":" .. due_date_str
@@ -149,10 +137,10 @@ function M.create_ical_vtodo(uid, vtodo, params)
 		end
 	end
 
-	---@type decscribe.ical.IcalEntry
+	---@type decscribe.ical.Entry
 	local dtstart_entry = nil
 	if vtodo.dtstart then
-		if vtodo.dtstart.precision == M.DatePrecision.Date then
+		if vtodo.dtstart.precision == dt.Precision.Date then
 			local dtstart_date_str = os.date("%Y%m%d", vtodo.dtstart.timestamp)
 			dtstart_entry = {
 				key = "DTSTART",
@@ -160,7 +148,7 @@ function M.create_ical_vtodo(uid, vtodo, params)
 				---@cast dtstart_date_str string
 				value = dtstart_date_str,
 			}
-		elseif vtodo.dtstart.precision == M.DatePrecision.DateTime then
+		elseif vtodo.dtstart.precision == dt.Precision.DateTime then
 			assert(params.tzid, "TZID required to print due date but not given")
 			local dtstart_date_str = os.date("%Y%m%dT%H%M%S", vtodo.dtstart.timestamp)
 			dtstart_entry = {
@@ -208,7 +196,7 @@ function M.create_ical_vtodo(uid, vtodo, params)
 end
 
 ---Returns nothing (`nil`) if there were no matches.
----@param ical ical.ical_t
+---@param ical decscribe.ical.String
 ---@param prop_name string
 ---@return string? prop_value
 ---@return integer? prop_name_idx
@@ -242,7 +230,7 @@ function M.find_ical_prop(ical, prop_name)
 	return prop_value, prop_name_idx, prop_value_start_idx, prop_value_end_idx
 end
 
----@return ical.ical_t
+---@return decscribe.ical.String
 local function insert_ical_prop(ical, prop_name, prop_value)
 	-- find propname closest to the target propname in the ICAL_PROP_NAMES order,
 	-- but still before it:
@@ -268,7 +256,7 @@ local function insert_ical_prop(ical, prop_name, prop_value)
 	return table.concat(ical_lines, "\r\n")
 end
 
----@return ical.ical_t
+---@return decscribe.ical.String
 local function update_ical_prop(ical, prop_name, prop_value)
 	local ical_lines = vim.split(ical, "\r\n")
 	for idx, line in ipairs(ical_lines) do
@@ -282,10 +270,10 @@ local function update_ical_prop(ical, prop_name, prop_value)
 	return table.concat(ical_lines, "\r\n")
 end
 
----@param ical ical.ical_t
+---@param ical decscribe.ical.String
 ---@param prop_name string
 ---@param prop_value string
----@return ical.ical_t new_ical
+---@return decscribe.ical.String new_ical
 function M.upsert_ical_prop(ical, prop_name, prop_value)
 	local ical_lines = vim.split(ical, "\r\n")
 	if
@@ -299,7 +287,7 @@ function M.upsert_ical_prop(ical, prop_name, prop_value)
 	return insert_ical_prop(ical, prop_name, prop_value)
 end
 
----@return ical.vtodo_t?
+---@return decscribe.ical.Vtodo?
 function M.parse_md_line(line)
 	local checkbox_heading = line:match("^[-*]%s+[[][ x][]]%s+")
 	-- there should always be a checkbox:
@@ -310,7 +298,7 @@ function M.parse_md_line(line)
 
 	line = line:sub(#checkbox_heading + 1)
 
-	---@type ical.Date?
+	---@type decscribe.date.Date?
 	local dtstart = nil
 
 	local _, dts_date_end, dts_year, dts_month, dts_day, dts_hour, dts_min =
@@ -325,7 +313,7 @@ function M.parse_md_line(line)
 			min = dts_min,
 		})
 		dtstart =
-			{ timestamp = dts_timestamp, precision = M.DatePrecision.DateTime }
+			{ timestamp = dts_timestamp, precision = dt.Precision.DateTime }
 	end
 
 	if not dtstart then
@@ -335,18 +323,18 @@ function M.parse_md_line(line)
 			line = line:sub(dts_date_end + 1)
 			local dts_timestamp =
 				os.time({ year = dts_year, month = dts_month, day = dts_day })
-			dtstart = { timestamp = dts_timestamp, precision = M.DatePrecision.Date }
+			dtstart = { timestamp = dts_timestamp, precision = dt.Precision.Date }
 		end
 	end
 
-	---@type ical.Date?
+	---@type decscribe.date.Date?
 	local due = nil
 	local _, due_date_end, year, month, day =
 		line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)%s*")
 	if due_date_end then
 		line = line:sub(due_date_end + 1)
 		local timestamp = os.time({ year = year, month = month, day = day })
-		due = { timestamp = timestamp, precision = M.DatePrecision.Date }
+		due = { timestamp = timestamp, precision = dt.Precision.Date }
 	end
 	-- FIXME: space between date and time not enforced here,
 	-- i.e. e.g. "2024-06-1212:36" is parsed as proper datetime
@@ -361,7 +349,7 @@ function M.parse_md_line(line)
 			min = min,
 			sec = 0,
 		})
-		due = { timestamp = timestamp, precision = M.DatePrecision.DateTime }
+		due = { timestamp = timestamp, precision = dt.Precision.DateTime }
 	end
 
 	local priority = nil
@@ -382,11 +370,11 @@ function M.parse_md_line(line)
 		line = line:sub(cat_end + 1)
 	end
 
-	---@type ical.vtodo_t
+	---@type decscribe.ical.Vtodo
 	local vtodo = {
 		summary = line,
 		completed = completed,
-		priority = priority or M.priority_t.undefined,
+		priority = priority or M.Priority.undefined,
 		categories = categories,
 		description = nil,
 		due = due,
@@ -396,16 +384,16 @@ function M.parse_md_line(line)
 	return vtodo
 end
 
----@param vtodo ical.vtodo_t
+---@param vtodo decscribe.ical.Vtodo
 ---@return string md_line a markdown line representing the todo entry
 function M.to_md_line(vtodo)
 	local line = "- [" .. (vtodo.completed and "x" or " ") .. "]"
 
 	local dtstart_str = nil
 	if vtodo.dtstart then
-		if vtodo.dtstart.precision == M.DatePrecision.Date then
+		if vtodo.dtstart.precision == dt.Precision.Date then
 			dtstart_str = os.date("%Y-%m-%d", vtodo.dtstart.timestamp)
-		elseif vtodo.dtstart.precision == M.DatePrecision.DateTime then
+		elseif vtodo.dtstart.precision == dt.Precision.DateTime then
 			dtstart_str = os.date("%Y-%m-%d %H:%M", vtodo.dtstart.timestamp)
 		else
 			error("Unexpected kind of dtstart date: " .. vim.inspect(vtodo.dtstart))
@@ -414,9 +402,9 @@ function M.to_md_line(vtodo)
 
 	local due_str = nil
 	if vtodo.due then
-		if vtodo.due.precision == M.DatePrecision.Date then
+		if vtodo.due.precision == dt.Precision.Date then
 			due_str = os.date("%Y-%m-%d", vtodo.due.timestamp)
-		elseif vtodo.due.precision == M.DatePrecision.DateTime then
+		elseif vtodo.due.precision == dt.Precision.DateTime then
 			due_str = os.date("%Y-%m-%d %H:%M", vtodo.due.timestamp)
 		else
 			error("Unexpected kind of due date: " .. vim.inspect(vtodo.due))
@@ -431,7 +419,7 @@ function M.to_md_line(vtodo)
 		line = line .. " " .. due_str
 	end
 
-	if vtodo.priority and vtodo.priority ~= M.priority_t.undefined then
+	if vtodo.priority and vtodo.priority ~= M.Priority.undefined then
 		local prio_char = M.labelled_priorities[vtodo.priority] or vtodo.priority
 		line = line .. " !" .. prio_char
 	end
@@ -448,20 +436,20 @@ function M.to_md_line(vtodo)
 end
 
 ---@param date_str string
----@return ical.Date? precisioned_date_opt or nil if could not parse
+---@return decscribe.date.Date? precisioned_date_opt or nil if could not parse
 local function to_prec_date(date_str)
 	local _, _, year, month, day =
 		string.find(date_str or "", "^(%d%d%d%d)(%d%d)(%d%d)")
 	if year and month and day then
 		local timestamp = os.time({ year = year, month = month, day = day })
-		return { timestamp = timestamp, precision = M.DatePrecision.Date }
+		return { timestamp = timestamp, precision = dt.Precision.Date }
 	else
 		return nil -- unexpected format
 	end
 end
 
 ---@param datetime_str string
----@return ical.Date? precisioned_date_opt nil if could not be parsed
+---@return decscribe.date.Date? precisioned_date_opt nil if could not be parsed
 local function to_prec_datetime(datetime_str)
 	local _, _, year, month, day, hour, minute =
 		string.find(datetime_str or "", "^(%d%d%d%d)(%d%d)(%d%d)T(%d%d)(%d%d)")
@@ -473,14 +461,14 @@ local function to_prec_datetime(datetime_str)
 			hour = hour,
 			min = minute,
 		})
-		return { timestamp = timestamp, precision = M.DatePrecision.DateTime }
+		return { timestamp = timestamp, precision = dt.Precision.DateTime }
 	else
 		return nil -- unexpected format
 	end
 end
 
----@param ical ical.ical_t
----@return ical.vtodo_t
+---@param ical decscribe.ical.String
+---@return decscribe.ical.Vtodo
 function M.vtodo_from_ical(ical)
 	local entries = M.ical_parse(ical)
 
@@ -495,7 +483,7 @@ function M.vtodo_from_ical(ical)
 			table.sort(vtodo_proto.categories)
 			if #vtodo_proto.categories == 0 then vtodo_proto.categories = nil end
 		elseif entry.key == "PRIORITY" then
-			vtodo_proto.priority = tonumber(entry.value) or M.priority_t.undefined
+			vtodo_proto.priority = tonumber(entry.value) or M.Priority.undefined
 		elseif entry.key == "STATUS" then
 			vtodo_proto.completed = entry.value == "COMPLETED"
 		elseif entry.key == "SUMMARY" then
@@ -527,7 +515,7 @@ function M.vtodo_from_ical(ical)
 		end
 	end
 
-	---@type ical.vtodo_t
+	---@type decscribe.ical.Vtodo
 	local vtodo = {
 		completed = vtodo_proto.completed,
 		priority = vtodo_proto.priority,
@@ -543,12 +531,12 @@ end
 
 ---parse an ICal string into a structured list of its properties
 ---@param ical string
----@return decscribe.ical.Ical
+---@return decscribe.ical.Document
 function M.ical_parse(ical)
 	-- cut out the trailing newline
 	if vim.endswith(ical, "\r\n") then ical = string.sub(ical, 1, #ical - 2) end
 
-	---@type decscribe.ical.Ical
+	---@type decscribe.ical.Document
 	local out = {}
 	for _, line in
 		ipairs(vim.split(ical, "\r\n", { plain = true, trimempty = true }))
@@ -580,7 +568,7 @@ function M.ical_parse(ical)
 end
 
 ---show an Ical structure as an ordinary Ical string for external use
----@param ical decscribe.ical.Ical
+---@param ical decscribe.ical.Document
 ---@return string
 function M.ical_show(ical)
 	local lines = {}

@@ -3,13 +3,13 @@ local lds = nil
 
 local M = {}
 
----@enum SyncType
+---@enum decscribe.libdecsync.SyncType
 M.SyncType = {
 	tasks = "tasks",
 	-- ... TODO
 }
 
----@alias libdecsync.json_string_t string
+---@alias decscribe.libdecsync.JsonString string
 
 ---@alias Callback
 ---| fun(path: string[], datetime: string, key: string?, value: string?)
@@ -47,7 +47,7 @@ function M.get_app_id(app_name)
 end
 
 ---@param decsync_dir string
----@param sync_type SyncType
+---@param sync_type decscribe.libdecsync.SyncType
 ---@return string[] collections
 function M.list_collections(decsync_dir, sync_type)
 	decsync_dir = decsync_dir or ""
@@ -87,7 +87,7 @@ function M.list_collections(decsync_dir, sync_type)
 end
 
 ---@param decsync_dir string
----@param sync_type SyncType
+---@param sync_type decscribe.libdecsync.SyncType
 ---@param collection string
 ---@param app_id string
 function M.connect(decsync_dir, sync_type, collection, app_id)
@@ -259,15 +259,15 @@ end
 -- (sync_type|collection)) for safety (make illegal states irrepresentable)
 --
 ---@class Collection
----@field sync_type SyncType
+---@field sync_type decscribe.libdecsync.SyncType
 ---@field collection string
 --
 ---@alias Category ("rss" | Collection)
 
 ---@param connection Connection
 ---@param path string[]
----@param key libdecsync.json_string_t?
----@param value libdecsync.json_string_t?
+---@param key decscribe.libdecsync.JsonString?
+---@param value decscribe.libdecsync.JsonString?
 function M.set_entry(connection, path, key, value)
 	ffi = ffi or require("ffi")
 	lds = lds or ffi.load("libdecsync")

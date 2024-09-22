@@ -12,7 +12,7 @@ local function decode_line(line)
 
 	line = line:sub(#checkbox_heading + 1)
 
-	---@type ical.Date?
+	---@type decscribe.date.Date?
 	local dtstart = nil
 
 	local _, dts_date_end, dts_year, dts_month, dts_day, dts_hour, dts_min =
@@ -41,7 +41,7 @@ local function decode_line(line)
 		end
 	end
 
-	---@type ical.Date?
+	---@type decscribe.date.Date?
 	local due = nil
 	local _, due_date_end, year, month, day =
 		line:find("^(%d%d%d%d)[-](%d%d)[-](%d%d)%s*")
