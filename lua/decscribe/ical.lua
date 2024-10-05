@@ -1,4 +1,5 @@
 local dt = require("decscribe.date")
+local core = require("decscribe.core")
 
 local M = {}
 
@@ -12,6 +13,8 @@ local M = {}
 ---@field opts? decscribe.ical.Options
 
 ---@alias decscribe.ical.Document decscribe.ical.Entry[]
+
+---@alias decscribe.ical.Tree table
 
 ---@class (exact) decscribe.ical.Vtodo
 ---@field summary string?
@@ -581,4 +584,190 @@ function M.ical_show(ical)
 	return table.concat(lines, "\r\n") .. "\r\n"
 end
 
+---@param str decscribe.ical.String
+---@return decscribe.ical.Tree
+function M.str2tree(str)
+	local result = {}
+	local stack = { result }
+	local current = result
+	--
+	for line in str:gmatch("[^\r\n]+") do
+		-- Trim whitespace:
+		line = line:match("^%s*(.-)%s*$")
+		--
+		if line:find("^BEGIN:") then
+			-- Get the type name after "BEGIN:":
+			local entry_name = line:sub(7)
+			local new_table = {}
+			current[entry_name] = new_table
+			table.insert(stack, current)
+			current = new_table
+		elseif line:find("^END:") then
+			-- Pop the last table from the stack:
+			current = table.remove(stack)
+		elseif line:find(":") then
+			local key, value = line:match("^(.-):(.*)$")
+			-- Try casting the value into a number or a list of values:
+			if tonumber(value) then
+				value = tonumber(value)
+			elseif value:match(",") then
+				value = vim.split(value, ",")
+			end
+			-- Try finding options in the key:
+			if key:find(";") then
+				value = { value }
+				local option_entries = vim.split(key, ";")
+				key = table.remove(option_entries, 1)
+				for _, entry in ipairs(option_entries) do
+					local opt_key, opt_val = entry:match("^(.-)=(.*)$")
+					if opt_key and opt_val then value[opt_key] = opt_val end
+				end
+			end
+			if key and value then current[key] = value end
+		end
+	end
+	--
+	return result
+end
+
+---@param tree decscribe.ical.Tree
+---@param key_comp? fun(key1: string, key2: string): boolean
+---@return string[] lines
+local function tree2lines(tree, key_comp)
+	--
+	key_comp = key_comp or function(k1, k2) return k1 < k2 end
+	-- First, gather the keys to ensure they're appended in a specific order:
+	local keys = {}
+	for key, _ in pairs(tree) do keys[#keys+1] = key end
+	table.sort(keys, key_comp)
+	-- Then, iterate through the keys:
+	local lines = {}
+	for _, key in ipairs(keys) do
+		local entry = tree[key]
+		-- If it's not a table, it's a primitive value:
+		if type(entry) ~= "table" then
+			lines[#lines + 1] = key .. ":" .. entry
+		-- If it has no indexed values, it's a nested BEGIN/END block:
+		elseif not entry[1] then
+			lines[#lines + 1] = "BEGIN:" .. key
+			for _, line in ipairs(tree2lines(entry, key_comp)) do
+				lines[#lines + 1] = line
+			end
+			lines[#lines + 1] = "END:" .. key
+		-- If it has exactly one indexed value and some keys,
+		-- it's an entry with options:
+		elseif entry[2] == nil and next(entry, 1) then
+			-- Get the non-option value first:
+			local main_value = table.remove(entry, 1)
+			-- Then come the optional keys:
+			local key_comps = {}
+			for k, v in pairs(entry) do
+				key_comps[#key_comps + 1] = k .. "=" .. v
+			end
+			-- Sort the options for predictability:
+			table.sort(key_comps)
+			-- First component of the entry key is the non-option key:
+			table.insert(key_comps, 1, key)
+			--
+			lines[#lines + 1] = table.concat(key_comps, ";") .. ":" .. main_value
+		-- If it has many entries and no keys, it's a list of primitives:
+		else
+			lines[#lines + 1] = key .. ":" .. table.concat(entry, ",")
+		end
+	end
+	return lines
+end
+
+---@param tree decscribe.ical.Tree
+---@param key_comp? fun(key1: string, key2: string): boolean
+---@return decscribe.ical.String
+function M.tree2str(tree, key_comp)
+	key_comp = key_comp or function(k1, k2) return k1 < k2 end
+	return table.concat(tree2lines(tree, key_comp), "\r\n") .. "\r\n"
+end
+
+local function ic_entry2sorted_list(opt_list)
+	if not opt_list then return nil end
+	local out = vim.deepcopy(opt_list)
+	table.sort(out)
+	return out
+end
+
+local function ic_entry2parent_uid(relto_entry)
+	if not relto_entry then return nil end
+	if not relto_entry.RELATED_TO == "PARENT" then return nil end
+	return relto_entry[1]
+end
+
+local function ic_entry2date(date_entry)
+	if not date_entry then return nil end
+	if not date_entry[1] then return nil end
+	if date_entry.VALUE == "DATE" then return to_prec_date(date_entry[1]) end
+	if date_entry.VALUE == "DATETIME" then
+		return to_prec_datetime(date_entry[1])
+	end
+	return nil
+end
+
+---@param tree decscribe.ical.Tree
+---@return decscribe.core.Todo? todo
+function M.tree2todo(tree)
+	local vtodo_tree = tree.VCALENDAR.VTODO
+	if not vtodo_tree then return nil end
+	---@type decscribe.core.Todo
+	local todo = {
+		completed = vtodo_tree.STATUS == "COMPLETED" or nil,
+		summary = vtodo_tree.SUMMARY,
+		description = vtodo_tree.DESCRIPTION,
+		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
+		-- categories alphabetically:
+		categories = ic_entry2sorted_list(vtodo_tree.CATEGORIES),
+		parent_uid = ic_entry2parent_uid(vtodo_tree["RELATED-TO"]),
+		dtstart = ic_entry2date(vtodo_tree.DTSTART),
+		due = ic_entry2date(vtodo_tree.DUE),
+	}
+	return todo
+end
+
+---@param prec_date decscribe.date.Date?
+---@return table?
+local function date2ic_entry(prec_date)
+	local out = {}
+	if not prec_date then return nil end
+	if prec_date.precision == dt.Precision.Date then out.VALUE = "DATE" end
+	out[1] = dt.prec_date2str(prec_date)
+	return out
+end
+
+---@param todo decscribe.core.Todo|decscribe.core.SavedTodo
+---@return decscribe.ical.Tree tree
+function M.todo2tree(todo)
+	---@type decscribe.ical.Tree
+	return {
+		VCALENDAR = {
+			VTODO = {
+				SUMMARY = todo.summary,
+				DESCRIPTION = todo.description,
+				CATEGORIES = todo.categories,
+				STATUS = todo.completed and "COMPLETED" or "NEEDS-ACTION",
+				DTSTART = date2ic_entry(todo.dtstart),
+				DUE = date2ic_entry(todo.due),
+				["RELATED-TO"] = todo.parent_uid
+					and { todo.parent_uid, RELTYPE = "PARENT" },
+				UID = todo.uid,
+			},
+		},
+	}
+end
+
+---@param trees { [decscribe.ical.Uid]: decscribe.ical.Tree }
+---@return decscribe.core.SavedTodo[]
+function M.trees2sts(trees)
+	local todos = {}
+	for uid, tree in pairs(trees) do
+		local todo = M.tree2todo(tree)
+		if todo then todos[#todos + 1] = core.with_uid(todo, uid) end
+	end
+	return todos
+end
 return M
