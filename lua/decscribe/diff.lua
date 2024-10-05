@@ -38,7 +38,9 @@ local function diff_list(before, after)
 		end
 		-- addition:
 		if count1 == 0 and count2 > 0 then
-			error("TODO")
+			for idx = start2, start2 + count2 - 1 do
+				out[idx] = after[idx]
+			end
 			goto continue
 		end
 		-- block change:
