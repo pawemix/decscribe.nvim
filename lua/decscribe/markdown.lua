@@ -1,4 +1,10 @@
+local core = require("decscribe.core")
+
 local M = {}
+
+-- TODO: decode String to Markdown AST which shall be then mapped to Todo. And
+-- vice versa. This way Todos can be presented in Markdown in a different
+-- fashion customized by user.
 
 ---@param line string
 ---@return decscribe.core.Todo?
@@ -98,38 +104,44 @@ local function decode_line(line)
 	return vtodo
 end
 
-
 ---@param md_lines string[]
----@return decscribe.core.Todo[]? todos
-local function decode_lines(md_lines)
-	---@type decscribe.core.Todo[]
-	local out = {}
-	local lines = md_lines
-	for idx = 1, #lines do
-		local line = lines[idx]
-		local todo = decode_line(line)
-		if not todo then goto continue end -- TODO: gather decoding errors
-		--- if next lines are indented, treat them as children:
-		local child_lines = {}
-		local child_idx = idx + 1
-		while lines[child_idx] and string.sub(lines[child_idx], 1, 1) == "\t" do
-			-- remove the minimal indendation to handle more nested subtodos:
-			child_lines[#child_lines+1] = string.sub(lines[child_idx], 2)
-			child_idx = child_idx + 1
-		end
-		if #child_lines > 0 then
-			todo.subtasks = decode_lines(child_lines)
-		end
-		out[#out + 1] = todo
-		::continue::
+---@param ancestors decscribe.core.TempRef[]
+---@param todos_aggr decscribe.core.TempTodo[]
+---@return decscribe.core.TempTodo[]? todos
+local function decode_lines(md_lines, ancestors, todos_aggr)
+	-- If there are no more lines to decode - finish:
+	if md_lines[1] == nil then return todos_aggr end
+	--
+	local child_indent_str = ("\t"):rep(#ancestors)
+	local line = md_lines[1]
+	-- If indentation is lower than expected for a sibling - move up a parent:
+	if not vim.startswith(line, child_indent_str) then
+		table.remove(ancestors)
+		return decode_lines(md_lines, ancestors, todos_aggr)
 	end
-	return out
+	-- remove child indentation:
+	line = line:sub(#child_indent_str + 1)
+	-- if a line is blank - discard it:
+	if #line:gsub("^%s+", "", 1) == 0 then
+		table.remove(md_lines, 1)
+		return decode_lines(md_lines, ancestors, todos_aggr)
+	end
+	-- assume the line to be okay and try to decode the todo:
+	local todo = assert(
+		decode_line(line), "Could not parse line: '" .. line .. "'!")
+	local new_ref = #todos_aggr + 1
+	local temp_todo = core.with_ref(todo, new_ref)
+	if ancestors[1] ~= nil then temp_todo.parent_ref = ancestors[#ancestors] end
+	todos_aggr[new_ref] = temp_todo
+	ancestors[#ancestors+1] = new_ref
+	table.remove(md_lines, 1)
+	return decode_lines(md_lines, ancestors, todos_aggr)
 end
 
 ---@param md_text string
----@return decscribe.core.Todo[]? todos
+---@return decscribe.core.TempTodo[]? todos
 function M.decode(md_text)
-	return decode_lines(vim.split(md_text, "\n"))
+	return decode_lines(vim.split(md_text, "\n"), {}, {})
 end
 
 return M
