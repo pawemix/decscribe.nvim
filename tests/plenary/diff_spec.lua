@@ -47,4 +47,11 @@ describe("diff", function()
 		local exp = { [2] = { bar = "after" } }
 		eq(exp, di.diff(before, after))
 	end)
+
+	it("recognizes added list items", function()
+		local before = { "first", "second", "fourth" }
+		local after = { "first", "second", "third", "fourth" }
+		local exp = { [3] = "third" }
+		eq(exp, di.diff(before, after))
+	end)
 end)
