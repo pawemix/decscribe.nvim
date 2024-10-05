@@ -7,14 +7,16 @@ describe("decode", function()
 	it("ignores blank input", function() eq({}, md.decode("   ")) end)
 
 	it("decodes simple todos", function()
-		--- @type decscribe.core.Todo[]
+		--- @type decscribe.core.TempTodo[]
 		local exp = {
 			{
+				ref = 1,
 				completed = true,
 				summary = "first",
 			},
 			{
-				completed = false,
+				ref = 2,
+				-- completed = false,
 				summary = "second",
 			},
 		}
@@ -28,23 +30,27 @@ describe("decode", function()
 	end)
 
 	it("decodes todos where one has children indented with a tab", function()
-		---@type decscribe.core.Todo[]
+		---@type decscribe.core.TempTodo[]
 		local exp = {
 			{
-				completed = false,
+				ref = 1,
+				-- completed = false,
 				summary = "parent",
-				subtasks = {
-					{
-						completed = false,
-						summary = "child 1",
-					},
-					{
-						completed = true,
-						summary = "child 2",
-					},
-				},
 			},
 			{
+				ref = 2,
+				-- completed = false,
+				summary = "child 1",
+				parent_ref = 1,
+			},
+			{
+				ref = 3,
+				completed = true,
+				summary = "child 2",
+				parent_ref = 1,
+			},
+			{
+				ref = 4,
 				completed = true,
 				summary = "childless",
 			},
@@ -61,23 +67,24 @@ describe("decode", function()
 	end)
 
 	it("decodes todos with grandchildren", function()
-		---@type decscribe.core.Todo[]
+		---@type decscribe.core.TempTodo[]
 		local exp = {
 			{
-				completed = false,
+				ref = 1,
+				-- completed = false,
 				summary = "grandparent",
-				subtasks = {
-					{
-						completed = false,
-						summary = "parent",
-						subtasks = {
-							{
-								completed = false,
-								summary = "child",
-							},
-						},
-					},
-				},
+			},
+			{
+				ref = 2,
+				-- completed = false,
+				summary = "parent",
+				parent_ref = 1,
+			},
+			{
+				ref = 3,
+				-- completed = false,
+				summary = "child",
+				parent_ref = 2,
 			},
 		}
 		local input = table.concat({
