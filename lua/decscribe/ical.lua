@@ -312,8 +312,7 @@ function M.parse_md_line(line)
 			hour = dts_hour,
 			min = dts_min,
 		})
-		dtstart =
-			{ timestamp = dts_timestamp, precision = dt.Precision.DateTime }
+		dtstart = { timestamp = dts_timestamp, precision = dt.Precision.DateTime }
 	end
 
 	if not dtstart then
