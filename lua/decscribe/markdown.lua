@@ -86,8 +86,8 @@ local function decode_line(line)
 
 	---@type decscribe.core.Todo
 	local vtodo = {
+		completed = completed or nil,
 		summary = line,
-		completed = completed,
 		priority = priority,
 		categories = #categories > 0 and categories or nil,
 		description = nil,
