@@ -106,6 +106,7 @@ describe("upsert_ical_prop", function()
 	end)
 end)
 
+-- TODO: why MD parsing is in ICal module?
 describe("parse_md_line", function()
 	it("rejects a non-checklist line", function()
 		local line = "- something"
@@ -201,6 +202,8 @@ describe("ical_parse", function()
 	end)
 
 	it("parses Ical with a multiline value", function()
+		-- TODO: according to ical spec, next lines of a multi-line string need
+		-- to be 2-space indented!
 		local ical = table.concat({
 			"BEGIN:CALENDAR",
 			"BEGIN:VTODO",
