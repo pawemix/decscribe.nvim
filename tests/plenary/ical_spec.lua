@@ -258,13 +258,8 @@ end)
 
 describe("str2tree", function()
 	it("parses an ICal with two nested BEGINs and ENDs", function()
-		local ical = table.concat({
-			"BEGIN:FOO",
-			"BEGIN:BAR",
-			"SUMMARY:baz",
-			"END:BAR",
-			"END:FOO",
-		}, "\r\n")
+		local ical =
+			"BEGIN:FOO\r\nBEGIN:BAR\r\nSUMMARY:baz\r\nEND:BAR\r\nEND:FOO\r\n"
 		local expected = { FOO = { BAR = { SUMMARY = "baz" } } }
 		eq(expected, ic.str2tree(ical))
 	end)
@@ -288,8 +283,8 @@ describe("str2tree", function()
 	end)
 end)
 
-describe("tree2str", function ()
-	it("renders an ICal with two nested BEGINs and ENDs", function ()
+describe("tree2str", function()
+	it("renders an ICal with two nested BEGINs and ENDs", function()
 		local ical = { FOO = { BAR = { SUMMARY = "baz" } } }
 		local expected = table.concat({
 			"BEGIN:FOO",
@@ -301,13 +296,13 @@ describe("tree2str", function ()
 		eq(expected, ic.tree2str(ical))
 	end)
 
-	it("renders an ICal with a comma-delimited list entry", function ()
+	it("renders an ICal with a comma-delimited list entry", function()
 		local ical = { FOO = { CATEGORIES = { "bar", "baz" } } }
 		local expected = "BEGIN:FOO\r\nCATEGORIES:bar,baz\r\nEND:FOO\r\n"
 		eq(expected, ic.tree2str(ical))
 	end)
 
-	it("renders an ICal with an entry with sorted options", function ()
+	it("renders an ICal with an entry with sorted options", function()
 		local ical = { FOO = { BAR = { "baz", OPT1 = "VAL1", OPT2 = "VAL2" } } }
 		local expected = "BEGIN:FOO\r\nBAR;OPT1=VAL1;OPT2=VAL2:baz\r\nEND:FOO\r\n"
 		eq(expected, ic.tree2str(ical))
