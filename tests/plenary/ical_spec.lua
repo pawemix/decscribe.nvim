@@ -252,3 +252,69 @@ describe("ical_show", function()
 		eq(expected, ic.ical_show(input))
 	end)
 end)
+
+describe("str2tree", function()
+	it("parses an ICal with two nested BEGINs and ENDs", function()
+		local ical = table.concat({
+			"BEGIN:FOO",
+			"BEGIN:BAR",
+			"SUMMARY:baz",
+			"END:BAR",
+			"END:FOO",
+		}, "\r\n")
+		local expected = { FOO = { BAR = { SUMMARY = "baz" } } }
+		eq(expected, ic.str2tree(ical))
+	end)
+
+	it("parses an ICal with a comma-delimited list entry", function()
+		local ical = "BEGIN:FOO\r\nCATEGORIES:bar,baz\r\nEND:FOO\r\n"
+		local expected = { FOO = { CATEGORIES = { "bar", "baz" } } }
+		eq(expected, ic.str2tree(ical))
+	end)
+
+	it("parses an Ical with a numeric value", function()
+		local ical = "BEGIN:FOO\r\nPRIORITY:1\r\nEND:FOO\r\n"
+		local expected = { FOO = { PRIORITY = 1 } }
+		eq(expected, ic.str2tree(ical))
+	end)
+
+	it("parses an ICal with two options", function()
+		local ical = "BEGIN:FOO\r\nBAR;OPT1=VAL1;OPT2=VAL2:baz\r\nEND:FOO\r\n"
+		local expected = { FOO = { BAR = { "baz", OPT1 = "VAL1", OPT2 = "VAL2" } } }
+		eq(expected, ic.str2tree(ical))
+	end)
+end)
+
+describe("tree2str", function ()
+	it("renders an ICal with two nested BEGINs and ENDs", function ()
+		local ical = { FOO = { BAR = { SUMMARY = "baz" } } }
+		local expected = table.concat({
+			"BEGIN:FOO",
+			"BEGIN:BAR",
+			"SUMMARY:baz",
+			"END:BAR",
+			"END:FOO",
+		}, "\r\n") .. "\r\n"
+		eq(expected, ic.tree2str(ical))
+	end)
+
+	it("renders an ICal with a comma-delimited list entry", function ()
+		local ical = { FOO = { CATEGORIES = { "bar", "baz" } } }
+		local expected = "BEGIN:FOO\r\nCATEGORIES:bar,baz\r\nEND:FOO\r\n"
+		eq(expected, ic.tree2str(ical))
+	end)
+
+	it("renders an ICal with an entry with sorted options", function ()
+		local ical = { FOO = { BAR = { "baz", OPT1 = "VAL1", OPT2 = "VAL2" } } }
+		local expected = "BEGIN:FOO\r\nBAR;OPT1=VAL1;OPT2=VAL2:baz\r\nEND:FOO\r\n"
+		eq(expected, ic.tree2str(ical))
+	end)
+
+	it("renders entries sorted alphabetically or by comparator", function()
+		local ical = { A = "foo", B = "bar" }
+		local expected = "A:foo\r\nB:bar\r\n"
+		local expected_rev = "B:bar\r\nA:foo\r\n"
+		eq(expected, ic.tree2str(ical))
+		eq(expected_rev, ic.tree2str(ical, function(a, b) return a >= b end))
+	end)
+end)
