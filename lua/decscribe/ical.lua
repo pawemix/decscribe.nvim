@@ -50,6 +50,24 @@ local ICAL_PROP_NAMES = {
 	-- TODO: insert END:VCALENDAR
 }
 
+local prop_name2idx = {}
+for i, prop_name in ipairs(ICAL_PROP_NAMES) do
+	prop_name2idx[prop_name] = i
+end
+
+---@param k1 string
+---@param k2 string
+---@return boolean is_ascending
+function M.default_key_comp(k1, k2)
+	return prop_name2idx[k1] < prop_name2idx[k2]
+end
+
+M.number2priority = {
+	[1] = core.Priority.HIGH,
+	[5] = core.Priority.MEDIUM,
+	[9] = core.Priority.LOW,
+}
+
 ---@enum decscribe.ical.Priority
 M.Priority = {
 	undefined = 0,
@@ -96,6 +114,20 @@ end
 ---@class ical.CreateIcalVtodo.Params
 ---@field fresh_timestamp? integer used for "created at" properties etc.
 ---@field tzid? string time zone id
+
+M.Vtodo = {}
+
+---@param uid decscribe.ical.Uid
+---@param todo decscribe.core.TodoDiff
+---@return decscribe.ical.String?
+function M.Vtodo.from_todo(uid, todo)
+	local parent = M.create_ical_vtodo(uid, {
+		completed = todo.completed,
+		summary = todo.summary,
+	})
+	-- TODO: create subtasks
+	return parent
+end
 
 ---@param uid decscribe.ical.Uid
 ---@param vtodo decscribe.ical.Vtodo
@@ -585,8 +617,12 @@ function M.ical_show(ical)
 end
 
 ---@param str decscribe.ical.String
+---@param cfg? { lists?: { [string]: boolean } }
 ---@return decscribe.ical.Tree
-function M.str2tree(str)
+function M.str2tree(str, cfg)
+	cfg = cfg or {}
+	cfg.lists = cfg.lists or {}
+	--
 	local result = {}
 	local stack = { result }
 	local current = result
@@ -607,10 +643,11 @@ function M.str2tree(str)
 			current = table.remove(stack)
 		elseif line:find(":") then
 			local key, value = line:match("^(.-):(.*)$")
-			-- Try casting the value into a number or a list of values:
+			-- Try casting the value into a number:
 			if tonumber(value) then
 				value = tonumber(value)
-			elseif value:match(",") then
+			-- Try casting into a list of comma-separated values if configured:
+			elseif cfg.lists[key] and value:match(",") then
 				value = vim.split(value, ",")
 			end
 			-- Try finding options in the key:
@@ -638,7 +675,9 @@ local function tree2lines(tree, key_comp)
 	key_comp = key_comp or function(k1, k2) return k1 < k2 end
 	-- First, gather the keys to ensure they're appended in a specific order:
 	local keys = {}
-	for key, _ in pairs(tree) do keys[#keys+1] = key end
+	for key, _ in pairs(tree) do
+		keys[#keys + 1] = key
+	end
 	table.sort(keys, key_comp)
 	-- Then, iterate through the keys:
 	local lines = {}
@@ -703,9 +742,7 @@ local function ic_entry2date(date_entry)
 	if not date_entry then return nil end
 	if not date_entry[1] then return nil end
 	if date_entry.VALUE == "DATE" then return to_prec_date(date_entry[1]) end
-	if date_entry.VALUE == "DATETIME" then
-		return to_prec_datetime(date_entry[1])
-	end
+	if date_entry.TZID then return to_prec_datetime(date_entry[1]) end
 	return nil
 end
 
@@ -714,6 +751,13 @@ end
 function M.tree2todo(tree)
 	local vtodo_tree = tree.VCALENDAR.VTODO
 	if not vtodo_tree then return nil end
+	---@type string[]?
+	local categories = nil
+	if type(vtodo_tree.CATEGORIES) == "string" then
+		categories = { vtodo_tree.CATEGORIES }
+	elseif type(vtodo_tree.CATEGORIES) == "table" then
+		categories = ic_entry2sorted_list(vtodo_tree.CATEGORIES)
+	end
 	---@type decscribe.core.Todo
 	local todo = {
 		completed = vtodo_tree.STATUS == "COMPLETED" or nil,
@@ -721,10 +765,11 @@ function M.tree2todo(tree)
 		description = vtodo_tree.DESCRIPTION,
 		-- NOTE: there is a convention (or at least tasks.org follows it) to sort
 		-- categories alphabetically:
-		categories = ic_entry2sorted_list(vtodo_tree.CATEGORIES),
+		categories = categories,
 		parent_uid = ic_entry2parent_uid(vtodo_tree["RELATED-TO"]),
 		dtstart = ic_entry2date(vtodo_tree.DTSTART),
 		due = ic_entry2date(vtodo_tree.DUE),
+		priority = M.number2priority[vtodo_tree.PRIORITY],
 	}
 	return todo
 end
@@ -755,6 +800,7 @@ function M.todo2tree(todo)
 				["RELATED-TO"] = todo.parent_uid
 					and { todo.parent_uid, RELTYPE = "PARENT" },
 				UID = todo.uid,
+				PRIORITY = todo.priority,
 			},
 		},
 	}
@@ -770,4 +816,7 @@ function M.trees2sts(trees)
 	end
 	return todos
 end
+
+--- TODO: patch_icals(icals, todo_diffs) ? patch_ical(ical, todo_diff) ?
+
 return M

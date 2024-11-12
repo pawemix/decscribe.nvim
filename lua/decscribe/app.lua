@@ -1,5 +1,8 @@
 local mc = require("decscribe.mixcoll")
+local cr = require("decscribe.core")
 local ic = require("decscribe.ical")
+local di = require("decscribe.diff")
+local md = require("decscribe.markdown")
 local dt = require("decscribe.date")
 
 local M = {}
@@ -264,77 +267,10 @@ local function on_line_changed(state, idx, new_line)
 	return uid, out_ical
 end
 
----@class (exact) decscribe.OpenBufferParams
----@field decsync_dir string
----@field collection_label decscribe.CollLabel
----@field list_collections_fn fun(ds_dir_path: string): decscribe.Collections
-
----@param state decscribe.State
----@param params decscribe.OpenBufferParams
-function M.open_buffer(state, params)
-	state.decsync_dir = params.decsync_dir
-	if not state.decsync_dir then
-		vim.notify_once(
-			"Decsync directory (arg #1) has to be given",
-			vim.log.levels.ERROR
-		)
-		return
-	end
-	-- expand potential path shortcuts like '~':
-	state.decsync_dir = vim.fn.expand(state.decsync_dir)
-
-	local coll_name = params.collection_label
-	if not coll_name then
-		vim.notify_once(
-			"Collection name (arg #2) has to be given",
-			vim.log.levels.ERROR
-		)
-		return
-	end
-	local colls = params.list_collections_fn(state.decsync_dir)
-	if not colls[coll_name] then
-		local msg = ("Collection '%s' does not exist."):format(coll_name)
-		local coll_names = vim.tbl_keys(colls)
-		if #coll_names > 0 then
-			local function enquote(s) return "'" .. s .. "'" end
-			msg = msg .. "\nAvailable collections: "
-			msg = msg .. table.concat(vim.tbl_map(enquote, coll_names), ", ")
-		end
-		vim.notify(msg, vim.log.levels.ERROR)
-		return
-	end
-	state.curr_coll_id = colls[coll_name]
-
-	-- FIXME: when rerunning the command and the buffer exists, don't create new
-	-- buffer
-
-	-- initialize and configure the buffer
-	if state.main_buf_nr == nil then
-		state.main_buf_nr = vim.api.nvim_create_buf(true, false)
-
-		vim.api.nvim_buf_set_name(
-			state.main_buf_nr,
-			"decscribe://" .. state.decsync_dir
-		)
-		vim.api.nvim_buf_set_option(state.main_buf_nr, "filetype", "decscribe")
-		vim.api.nvim_buf_set_option(state.main_buf_nr, "buftype", "acwrite")
-		-- vim.api.nvim_buf_set_option(bufnr, "number", false)
-		-- vim.api.nvim_buf_set_option(bufnr, "cursorline", false)
-		-- vim.cmd [[setlocal omnifunc=v:lua.octo_omnifunc]]
-		-- vim.cmd [[setlocal conceallevel=2]]
-		-- vim.cmd [[setlocal signcolumn=yes]]
-
-		-- TODO: apply buf-local mappings (e.g. <C-Space> on checking todos)
-	end
-
-	if vim.api.nvim_get_current_buf() ~= state.main_buf_nr then
-		vim.api.nvim_set_current_buf(state.main_buf_nr)
-	end
-end
-
 ---@class decscribe.ReadBufferParams
 ---@field icals table<decscribe.ical.Uid, decscribe.ical.String>
 
+---@deprecated
 ---@param state decscribe.State
 ---@param params decscribe.ReadBufferParams
 ---@return string[] lines
@@ -372,11 +308,117 @@ end
 ---@class decscribe.WriteBufferParams
 ---@field new_lines string[]
 ---@field fresh_timestamp? integer
+---TODO: Decouple domain from timestamps - return closure
 ---@field seed? integer used for random operations
+---TODO: Decouple domain from random operations - return closure
 
 ---@class (exact) decscribe.WriteBufferOutcome
 ---@field changes table<decscribe.ical.Uid, decscribe.ical.String|false>
+---FIXME: Decouple domain from Ical format!
 
+---Load new state from ICal database and adapt the application state to it.
+---@param icals { [decscribe.ical.Uid]: decscribe.ical.String } just read from the persistent database
+---@return string[] next_lines to be rendered in a visual buffer
+---@return decscribe.core.SavedTodo[] store to be put into memory
+function M.read_icals(icals)
+	local uid_to_tree = {}
+	for uid, str in pairs(icals) do
+		uid_to_tree[uid] = ic.str2tree(str, { lists = { CATEGORIES = true }})
+	end
+	local store = ic.trees2sts(uid_to_tree)
+	local lines = {}
+	-- for _, todo in ipairs(store) do lines[#lines+1] = ic.to_md_line(todo) end
+	for _, todo in ipairs(store) do
+		lines[#lines + 1] = md.todo2str(cr.unuid(todo))
+	end
+	return lines, store
+end
+
+---@param curr_store decscribe.core.SavedTodo[] saved currently in memory
+---@param curr_view string the buffer content; one big string with newlines
+---@return decscribe.core.SavedTodo[] next_store
+function M.read_view(curr_store, curr_view)
+	-- Load new state from the Markdown buffer:
+	local next_todos = md.decode(curr_view)
+	assert(next_todos, "Failed to parse the Markdown buffer!")
+	-- Sync the buffer with the store internally:
+	local db_changes, on_db_changed = cr.sync_buffer(curr_store, next_todos)
+	-- Commit the changes to the DB
+	--db_icals.bar = ic.todo2tree(cr.with_uid(db_changes[1], "bar"))
+	-- TODO: implement patch_trees
+	-- local patched_ic_trees = ic.patch_trees(ic_trees, db_changes)
+	-- eq(ic_trees.foo, patched_ic_trees.foo) -- parent hasn't changed
+	-- TODO: don't forget to add UID - UIDs are there in the ICal JSONs
+	-- 5. Apply the requested DB changes to internal store
+	local next_store = on_db_changed({ [1] = "bar" })
+	return next_store
+end
+
+---@param state decscribe.State
+---@param params decscribe.WriteBufferParams
+---@return decscribe.WriteBufferOutcome
+function M.write_buffer_new(state, params)
+	local old_sorted_tasks = mc.to_sorted_list(state.tasks, M.task_comp_default)
+
+	---@type decscribe.ical.Uid[] all recorded UIDs, in order to properly create new ones
+	local all_uids = {}
+	for id, _ in pairs(old_sorted_tasks) do
+		if type(id) == "string" then all_uids[#all_uids + 1] = id end
+	end
+
+	local old_todos = md.decode(table.concat(state.lines, "\n"))
+	local new_todos = md.decode(table.concat(params.new_lines, "\n"))
+
+	---@param todo_diff table
+	---@return decscribe.ical.Uid
+	---@return table
+	local function mk_vtodo(todo_diff)
+		local new_uid = ic.generate_uid(all_uids, params.seed)
+		all_uids[#all_uids + 1] = new_uid
+		-- error("TODO: map core.Todo to ical.Todo")
+		ic.ical_vtodo.from_todo(new_uid, todo_diff)
+		local new_ical = ic.create_ical_vtodo(
+			new_uid,
+			todo_diff,
+			{ tzid = state.tzid, fresh_timestamp = params.fresh_timestamp }
+		)
+		return new_uid, new_ical
+	end
+
+	---@cast old_todos table<integer, decscribe.core.Todo>
+	---@cast new_todos table<integer, decscribe.core.Todo>
+	local todos_diff = di.diff(old_todos, new_todos)
+	---@type decscribe.WriteBufferOutcome
+	local out = { changes = {} }
+	for pos, todo_diff in pairs(todos_diff) do
+		local old_task = old_sorted_tasks[pos]
+		if old_task then
+			if todo_diff == di.Removal then -- task has been removed
+				out.changes[old_task.uid] = false
+			else -- task has been modified
+				--repo.upsert_todos(todo_diff + uids) -- (dependency injection)
+				--out.changes[uid] = upd_todo_diff; out.changes[#out.changes+1] =  (dependency rejection)
+
+				local updated_ical = ic.patch(old_task.ical, todo_diff)
+
+				-- for _, subtask_diff in ipairs(todo_diff.subtasks) do
+				-- local new_uid, new_vtodo = mk_vtodo(subtask_diff)
+				-- out.changes[new_uid] = new_vtodo
+				-- end
+				error("TODO: get old icals & make updates based on diff")
+				-- out.changes[old_task.uid] = todo_change
+				out.changes[old_task.uid] = ic.ical_show(updated_ical)
+			end
+		else -- new task was created
+			local new_uid, new_vtodo = mk_vtodo(todo_diff)
+			out[new_uid] = new_vtodo
+		end
+	end
+
+	return out
+end
+
+---@deprecated
 ---@param state decscribe.State
 ---@param params decscribe.WriteBufferParams
 ---@return decscribe.WriteBufferOutcome

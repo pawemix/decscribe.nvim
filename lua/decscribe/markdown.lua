@@ -1,6 +1,13 @@
+local dt = require("decscribe.date")
 local core = require("decscribe.core")
 
 local M = {}
+
+M.priority2label = {
+	[core.Priority.HIGH] = "H",
+	[core.Priority.MEDIUM] = "M",
+	[core.Priority.LOW] = "L",
+}
 
 -- TODO: decode String to Markdown AST which shall be then mapped to Todo. And
 -- vice versa. This way Todos can be presented in Markdown in a different
@@ -142,6 +149,59 @@ end
 ---@return decscribe.core.TempTodo[]? todos
 function M.decode(md_text)
 	return decode_lines(vim.split(md_text, "\n"), {}, {})
+end
+
+---@param todo decscribe.core.Todo
+---@return string
+function M.todo2str(todo)
+	local line = "- [" .. (todo.completed and "x" or " ") .. "]"
+
+	local dtstart_str = nil
+	if todo.dtstart then
+		if todo.dtstart.precision == dt.Precision.Date then
+			dtstart_str = os.date("%Y-%m-%d", todo.dtstart.timestamp)
+		elseif todo.dtstart.precision == dt.Precision.DateTime then
+			dtstart_str = os.date("%Y-%m-%d %H:%M", todo.dtstart.timestamp)
+		else
+			error("Unexpected kind of dtstart date: " .. vim.inspect(todo.dtstart))
+		end
+	end
+
+	local due_str = nil
+	if todo.due then
+		if todo.due.precision == dt.Precision.Date then
+			due_str = os.date("%Y-%m-%d", todo.due.timestamp)
+		elseif todo.due.precision == dt.Precision.DateTime then
+			due_str = os.date("%Y-%m-%d %H:%M", todo.due.timestamp)
+		else
+			error("Unexpected kind of due date: " .. vim.inspect(todo.due))
+		end
+	end
+
+	if dtstart_str and due_str then
+		line = line .. " " .. dtstart_str .. ".." .. due_str
+	elseif dtstart_str then
+		line = line .. " " .. dtstart_str .. ".."
+	elseif due_str then
+		line = line .. " " .. due_str
+	end
+
+	if todo.priority then
+		local prio_char = assert(
+			M.priority2label[todo.priority],
+			"Unrecognized priority: " .. vim.inspect(todo.priority))
+		line = line .. " !" .. prio_char
+	end
+	if todo.categories and #todo.categories > 0 then
+		local function in_colons(s) return ":" .. s .. ":" end
+		local categories_str =
+			table.concat(vim.tbl_map(in_colons, todo.categories), " ")
+		line = line .. " " .. categories_str
+	end
+	if todo.summary then line = line .. " " .. todo.summary end
+	-- TODO: handle newlines (\n as well as \r\n) in summary more elegantly
+	line = line:gsub("\r?\n", " ")
+	return line
 end
 
 return M

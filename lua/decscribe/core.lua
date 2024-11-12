@@ -14,6 +14,14 @@ local M = {}
 ---@class (exact) decscribe.core.Saved
 ---@field uid decscribe.core.Uid
 
+---@enum decscribe.core.Priority
+---Priority. Undefined priority shall be `nil`.
+M.Priority = {
+	HIGH = "HIGH",
+	MEDIUM = "MEDIUM",
+	LOW = "LOW",
+}
+
 ---@class (exact) decscribe.core.TodoDiff
 ---This gets sent into the database for patching.
 ---@field completed? boolean | decscribe.core.Removed
@@ -29,6 +37,7 @@ local M = {}
 ---@field categories? string[]
 ---@field dtstart decscribe.date.Date?
 ---@field due decscribe.date.Date?
+---@field priority? decscribe.core.Priority
 
 ---@param todo decscribe.core.Todo
 ---@param ref decscribe.core.TempRef
@@ -83,6 +92,11 @@ end
 ---@field completed? boolean `false` by default
 ---@field summary? string empty by default
 ---@field parent_uid? decscribe.core.Uid
+---@field description? string
+---@field categories? string[]
+---@field dtstart decscribe.date.Date?
+---@field due decscribe.date.Date?
+---@field priority? decscribe.core.Priority
 
 ---@param tt decscribe.core.TempTodo
 ---@param uid decscribe.core.Uid

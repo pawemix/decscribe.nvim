@@ -264,10 +264,16 @@ describe("str2tree", function()
 		eq(expected, ic.str2tree(ical))
 	end)
 
-	it("parses an ICal with a comma-delimited list entry", function()
-		local ical = "BEGIN:FOO\r\nCATEGORIES:bar,baz\r\nEND:FOO\r\n"
-		local expected = { FOO = { CATEGORIES = { "bar", "baz" } } }
+	it("parses an ICal with a comma-delimited list entry NOT specified as a list", function()
+		local ical = "BEGIN:FOO\r\nBAR:baz,kux\r\nEND:FOO\r\n"
+		local expected = { FOO = { BAR = "baz,kux" } }
 		eq(expected, ic.str2tree(ical))
+	end)
+
+	it("parses an ICal with a comma-delimited list entry", function()
+		local ical = "BEGIN:FOO\r\nBARS:baz,kux\r\nEND:FOO\r\n"
+		local expected = { FOO = { BARS = { "baz", "kux" } } }
+		eq(expected, ic.str2tree(ical, { lists = { BARS = true }}))
 	end)
 
 	it("parses an Ical with a numeric value", function()
@@ -314,5 +320,65 @@ describe("tree2str", function()
 		local expected_rev = "B:bar\r\nA:foo\r\n"
 		eq(expected, ic.tree2str(ical))
 		eq(expected_rev, ic.tree2str(ical, function(a, b) return a >= b end))
+	end)
+end)
+
+describe("trees2sts", function()
+	local trees2sts = ic.trees2sts
+
+	it("loads a simple todo", function()
+		local trees =
+			{ foo = { VCALENDAR = { VTODO = { UID = "foo", SUMMARY = "parent" } } } }
+		eq({ { uid = "foo", summary = "parent" } }, trees2sts(trees))
+	end)
+
+	it("prioritizes table keys over UID ICal entry", function()
+		local trees = {
+			bar = { VCALENDAR = { VTODO = { UID = "foo", SUMMARY = "todo" } } },
+		}
+		eq({ { uid = "bar", summary = "todo" } }, trees2sts(trees))
+	end)
+
+	it("reads a datetime with timezone info", function()
+		---@type decscribe.ical.Tree
+		local input_tree = {
+			VCALENDAR = {
+				VTODO = {
+					SUMMARY = "bar",
+					DTSTART = { "20240612T1630", TZID = "Europe/Berlin" },
+				},
+			},
+		}
+		---@type decscribe.core.SavedTodo
+		local expected_todo = {
+			uid = "foo",
+			summary = "bar",
+			dtstart = {
+				precision = "DATETIME",
+				timestamp = os.time({
+					year = 2024, month = 06, day = 12, hour = 16, min = 30
+				}),
+			},
+		}
+		eq({ expected_todo }, trees2sts({ foo = input_tree }))
+	end)
+end)
+
+describe("todo2tree", function()
+	it("maps a todo with UID, summary and a parent", function()
+		---@type decscribe.core.SavedTodo
+		local todo = { uid = "foo", summary = "some todo", parent_uid = "bar" }
+		---@type decscribe.ical.Tree
+		local expected = {
+			VCALENDAR = {
+				VTODO = {
+					UID = "foo",
+					SUMMARY = "some todo",
+					STATUS = "NEEDS-ACTION",
+					["RELATED-TO"] = { "bar", RELTYPE = "PARENT" },
+				},
+			},
+		}
+		eq(expected, ic.todo2tree(todo))
 	end)
 end)

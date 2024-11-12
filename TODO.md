@@ -38,8 +38,11 @@
 - [x] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [x] app.lua: read_buffer: refactor to impureim sandwich for easier testing
 - [x] refactor Tasks class to simple functions on a simple struct -> collections.lua
+- [ ] finish rewriting to new data structure
+- [ ] IcalTree: handle sequence of multiple BEGIN:XYZ..END:XYZ
 - [ ] subtasks
 - [ ] description
+- [ ] apply buf-local mappings (e.g. <C-Space> on checking todos)
 - [ ] refactor to make writing tests less of a chore?
     - [ ] split app into data-format-agnostic core and two mappers (`read`er (parser) and `show`er) - ICal & Markdown
     - such that adding new fields to the whole app is like tweaking a declarative configuration passed into these mappers; the unit tests shall only test the generic part

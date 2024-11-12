@@ -96,3 +96,22 @@ describe("decode", function()
 		eq(exp, act)
 	end)
 end)
+
+describe("todo2str", function()
+	it("renders dtstart datetime with timezone", function()
+		local date = os.time({
+			year = 2017,
+			month = 6,
+			day = 2,
+			hour = 15,
+			min = 30,
+		})
+		---@type decscribe.core.Todo
+		local input_todo = {
+			summary = "summary",
+			dtstart = { precision = "DATETIME", timestamp = date },
+		}
+		local expected = "- [ ] 2017-06-02 15:30.. summary"
+		eq(expected, md.todo2str(input_todo))
+	end)
+end)
