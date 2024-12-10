@@ -38,6 +38,18 @@
 - [x] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [x] app.lua: read_buffer: refactor to impureim sandwich for easier testing
 - [x] refactor Tasks class to simple functions on a simple struct -> collections.lua
+- [ ] replace decsync bindings with custom implementation
+    - [x] is path a decsync dir
+    - [x] list collections
+    - [x] retrieve all task-collection's icals
+    - [ ] update task collection
+        - [ ] updates
+        - [ ] creations
+        - [ ] removals
+- [ ] `app.open_buffer.list_collections_fn` - fail on coll path pointing at nonexistent (ds-)dir
+- [ ] app.lua: read_buffer: refactor to impureim sandwich for easier testing
+- [ ] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
+- [ ] start datetimes (syntax: `- [ ] 2022-06-12 09:00 .. 2022-06-29 09:00`)
 - [ ] subtasks
 - [ ] description
 - [ ] refactor to make writing tests less of a chore?
