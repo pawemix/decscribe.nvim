@@ -47,6 +47,7 @@
         - [x] creations
         - [x] removals
     - [ ] if nonexistent <app-id>/ dir - create one
+- [ ] if nonexistent collection, offer to create one
 - [ ] `app.open_buffer.list_collections_fn` - fail on coll path pointing at nonexistent (ds-)dir
 - [ ] app.lua: read_buffer: refactor to impureim sandwich for easier testing
 - [ ] start dates (syntax: `- [ ] 2022-06-12 .. 2022-06-29 09:00`)
