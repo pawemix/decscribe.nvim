@@ -45,11 +45,21 @@ local function run_iter(shell_code, ...)
 	end
 end
 
+---@param path string
+---@return string
+local function normalize_path(path)
+	-- Cut trailing slash from the path if present:
+	if string.sub(path, #path) == "/" then
+		path = string.sub(path, 1, #path - 1)
+	end
+	return path
+end
+
 ---Check the filesystem whether `path` is a decsync directory.
 ---@param path string
 ---@return boolean
 function M.is_decsync_dir(path)
-	path = path:gsub("/*$", "", 1)
+	path = normalize_path(path)
 	local ds_info_file, open_err = io.open(path .. "/.decsync-info", "r")
 	if not ds_info_file or open_err then return false end
 	ds_info_file:close()
@@ -97,7 +107,8 @@ end
 ---@param coll_id string
 ---@return { [string]: string }? uids_to_icals
 function M.retrieve_task_icals(ds_dir, coll_id)
-	ds_dir = ds_dir:gsub("/*$", "", 1)
+	-- Normalize input parameters:
+	ds_dir = normalize_path(ds_dir)
 	local uid_to_updated_datetime = {}
 	local uid_to_ical = {}
 	for entry_str in run_iter('cat "$1"/tasks/"$2"/v2/*/??', ds_dir, coll_id) do
