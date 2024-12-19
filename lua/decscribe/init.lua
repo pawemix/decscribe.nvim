@@ -1,5 +1,5 @@
-local lds = require("decscribe.libdecsync")
 local app = require("decscribe.app")
+local ds = require("decscribe.decsync")
 
 local M = {}
 
@@ -26,84 +26,8 @@ local state = {
 	decsync_dir = nil,
 }
 
----@type Connection
-local conn = nil
-
 -- Functions
 ------------
-
----checks the filesystem whether |path| is a decsync directory
----@param path string
----@return boolean
-local function is_decsync_dir(path)
-	return vim.fn.filereadable(vim.fn.expand(path .. "/.decsync-info")) == 1
-end
-
----@param ds_dir string path to the decsync directory
----@return decscribe.Collections
-local function list_collections(ds_dir)
-	local app_id = lds.get_app_id(APP_NAME)
-
-	local coll_ids = lds.list_collections(ds_dir, "tasks")
-	local coll_name_to_ids = {}
-
-	for _, coll_id in ipairs(coll_ids) do
-		local coll_conn
-		coll_conn = lds.connect(ds_dir, "tasks", coll_id, app_id)
-		lds.add_listener(coll_conn, { "info" }, function(_, _, key, value)
-			key = key or "null"
-			key = vim.fn.json_decode(key)
-			value = value or "null"
-			value = vim.fn.json_decode(value)
-			if key == "name" and value then coll_name_to_ids[value] = coll_id end
-		end)
-		lds.init_done(coll_conn)
-		lds.init_stored_entries(coll_conn)
-		lds.execute_all_stored_entries_for_path_exact(coll_conn, { "info" })
-	end
-
-	return coll_name_to_ids
-end
-
-local function lds_retrieve_icals()
-	conn = lds.connect(
-		state.decsync_dir,
-		"tasks",
-		state.curr_coll_id,
-		lds.get_app_id(APP_NAME)
-	)
-	local uid_to_ical = {}
-	lds.add_listener(conn, { "resources" }, function(path, _, _, value)
-		assert(#path == 1, "Unexpected path length while reading updated entry")
-		---@type ical.uid_t
-		---@diagnostic disable-next-line: assign-type-mismatch
-		local todo_uid = path[1]
-		if value == "null" then
-			-- nil value means entry was deleted
-			uid_to_ical[todo_uid] = nil
-			return
-		end
-		local todo_ical = vim.fn.json_decode(value)
-		assert(todo_ical ~= nil, "Invalid JSON while reading updated entry")
-		uid_to_ical[todo_uid] = todo_ical
-	end)
-	lds.init_done(conn)
-
-	-- read all current data
-	lds.init_stored_entries(conn)
-	lds.execute_all_stored_entries_for_path_prefix(conn, { "resources" })
-
-	return uid_to_ical
-end
-
-local function lds_update_ical(uid, ical)
-	local ical_json = vim.fn.json_encode(ical)
-	lds.set_entry(conn, { "resources", uid }, nil, ical_json)
-end
-
-local function lds_delete_ical(uid)
-	lds.set_entry(conn, { "resources", uid }, nil, nil)
-end
 
 local function nvim_buf_set_opt(opt_name, value)
 	vim.api.nvim_buf_set_option(state.main_buf_nr, opt_name, value)
@@ -118,6 +42,57 @@ local function nvim_buf_set_lines(start, end_, lines)
 	local bufnr = state.main_buf_nr
 	assert(bufnr)
 	vim.api.nvim_buf_set_lines(bufnr, start, end_, false, lines)
+end
+
+---@return { [string]: string }?
+local function try_retrieve_task_icals()
+	local icals, err =
+		ds.retrieve_task_icals(state.decsync_dir, state.curr_coll_id)
+	if not icals then
+		if not err then error("Unexpected error occurred!") end
+		if err.no_ds_dir then
+			local ds_dir = err.no_ds_dir
+			vim.notify(
+				("No Decsync directory at '%s'!"):format(ds_dir),
+				vim.log.levels.ERROR
+			)
+			local should_create_dir = vim.fn
+				.input({
+					prompt = "Not a Decsync directory. Create one? [y/N] ",
+					default = "n",
+					cancelreturn = "n",
+				})
+				:lower() == "y"
+			if should_create_dir then
+				error("TODO create ds dir")
+			else
+				return nil
+			end
+		end
+		if err.no_coll_dir then
+			---@type string
+			local ds_dir = err.no_coll_dir.ds_dir
+			---@type string
+			local coll_id = err.no_coll_dir.coll_id
+			vim.notify(
+				("No collection with ID '%s' at Decsync directory '%s'!"):format(
+					coll_id,
+					ds_dir
+				),
+				vim.log.levels.ERROR
+			)
+			local should_create_coll = vim.fn
+				.input({
+					prompt = "No such collection found. Create one? [y/N] ",
+					default = "n",
+					cancelreturn = "n",
+				})
+				:lower() == "y"
+			if should_create_coll then error("TODO create coll") end
+		end
+		error("Unexpected error occurred!")
+	end
+	return icals
 end
 
 ---@class (exact) decscribe.SetupOptions
@@ -135,7 +110,8 @@ function M.setup(opts)
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			local new_lines = app.read_buffer(state, { icals = lds_retrieve_icals() })
+			local icals = assert(try_retrieve_task_icals())
+			local new_lines = app.read_buffer(state, { icals = icals })
 			nvim_buf_set_lines(0, -1, new_lines)
 			nvim_buf_set_opt("modified", false)
 		end,
@@ -145,48 +121,79 @@ function M.setup(opts)
 		group = augroup,
 		pattern = { "decscribe://*" },
 		callback = function()
-			local out = app.write_buffer(state, {
+			local ical_updates = app.write_buffer(state, {
 				new_lines = nvim_buf_get_lines(0, -1),
 			})
-			for uid, ical in pairs(out.changes) do
-				if ical then
-					lds_update_ical(uid, ical)
-				else
-					lds_delete_ical(uid)
-				end
-			end
+			ds.patch_task_icals(
+				assert(state.decsync_dir),
+				assert(ds.get_app_id(APP_NAME)),
+				assert(state.curr_coll_id),
+				ical_updates.changes
+			)
 			nvim_buf_set_opt("modified", false)
 		end,
 	})
 
-	vim.api.nvim_create_user_command(
-		"Decscribe",
-		function(params)
-			app.open_buffer(state, {
-				decsync_dir = params.fargs[1],
-				collection_label = params.fargs[2],
-				list_collections_fn = list_collections,
-			})
-			local new_lines = app.read_buffer(state, {
-				icals = lds_retrieve_icals(),
-			})
-			nvim_buf_set_lines(0, -1, new_lines)
-			nvim_buf_set_opt("modified", false)
-		end,
-		{
-			nargs = "+",
-			---@type CompleteCustomListFunc
-			complete = function(arg_lead, cmd_line)
-				return app.complete_commandline(arg_lead, cmd_line, {
-					is_decsync_dir_fn = is_decsync_dir,
-					list_collections_fn = list_collections,
-					complete_path_fn = function(path_prefix)
-						return vim.fn.getcompletion(path_prefix, "file", true)
-					end,
-				})
+	vim.api.nvim_create_user_command("Decscribe", function(params)
+		app.open_buffer(state, {
+			decsync_dir = params.fargs[1],
+			collection_label = params.fargs[2],
+			list_collections_fn = function(ds_dir)
+				return assert(ds.list_task_colls(ds_dir))
 			end,
-		}
-	)
+			read_buffer_params = {
+				db_retrieve_icals = function()
+					error("app.open_buffer shouldn't need db_retrieve_icals now!")
+				end,
+				ui = {
+					buf_set_lines = nvim_buf_set_lines,
+					buf_get_lines = nvim_buf_get_lines,
+					buf_set_opt = nvim_buf_set_opt,
+				},
+			},
+		})
+		local new_icals = assert(try_retrieve_task_icals())
+		local new_lines = app.read_buffer(state, { icals = new_icals })
+		nvim_buf_set_lines(0, -1, new_lines)
+		nvim_buf_set_opt("modified", false)
+	end, {
+		nargs = "+",
+		---@type CompleteCustomListFunc
+		complete = function(arg_lead, cmd_line)
+			return app.complete_commandline(arg_lead, cmd_line, {
+				is_decsync_dir_fn = ds.is_decsync_dir,
+				list_collections_fn = function(ds_dir)
+					local colls, err = ds.list_task_colls(ds_dir)
+					if colls then
+						if err then vim.notify(vim.inspect(err), vim.log.levels.WARN) end
+						return colls
+					elseif err and err.no_ds_dir then
+						vim.notify_once(
+							("No Decsync directory at '%s'."):format(err.no_ds_dir),
+							vim.log.levels.WARN
+						)
+					elseif err and err.no_coll_dir then
+						vim.notify_once(
+							("No collection named '%s' at Decsync directory '%s'."):format(
+								err.no_coll_dir.coll_id,
+								err.no_coll_dir.ds_dir
+							),
+							vim.log.levels.WARN
+						)
+					else
+						vim.notify_once(
+							"Unexpected error while listing collections.",
+							vim.log.levels.WARN
+						)
+					end
+					return {}
+				end,
+				complete_path_fn = function(path_prefix)
+					return vim.fn.getcompletion(path_prefix, "file", true)
+				end,
+			})
+		end,
+	})
 end
 
 return M
