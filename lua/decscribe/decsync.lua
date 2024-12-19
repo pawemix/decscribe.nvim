@@ -81,13 +81,43 @@ end
 
 function M.get_app_id(app_name) return get_hostname() .. "-" .. app_name end
 
+---@class (exact) decscribe.decsync.NoDsDir
+---@field no_ds_dir string
+
+---@param ds_dir string
+---@return decscribe.decsync.NoDsDir
+local function NoDsDir(ds_dir)
+	---@type decscribe.decsync.NoDsDir
+	return { no_ds_dir = ds_dir }
+end
+
+---@class (exact) decscribe.decsync.NoCollDirModel
+---@field ds_dir string
+---@field coll_id string
+
+---@class (exact) decscribe.decsync.NoCollDir
+---@field no_coll_dir decscribe.decsync.NoCollDirModel
+
+---@param ds_dir string
+---@param coll_id string
+---@return decscribe.decsync.NoCollDir
+local function NoCollDir(ds_dir, coll_id)
+	---@type decscribe.decsync.NoCollDir
+	return { no_coll_dir = { ds_dir = ds_dir, coll_id = coll_id } }
+end
+
+---@alias decscribe.decsync.DecsyncError
+---| decscribe.decsync.NoDsDir
+---| decscribe.decsync.NoCollDir
+---| decscribe.decsync.NoAppDir
+
 ---@see get_app_id
 ---@param ds_dir string Path to a potential decsync directory.
 ---@return { [string]: string }? colls mapping of collection labels to UIDs
+---@return (decscribe.decsync.NoDsDir | decscribe.decsync.NoCollDir)?
 function M.list_task_colls(ds_dir)
 	ds_dir = ds_dir:gsub("/*$", "", 1)
-	if not M.is_decsync_dir(ds_dir) then return nil end
-	-- TODO: use app_name and clone app dir from another, most recent app
+	if not M.is_decsync_dir(ds_dir) then return nil, NoDsDir(ds_dir) end
 	local task_metas = run('grep -F "name" "$1"/tasks/*/v2/*/info', ds_dir)
 	if not task_metas then return nil end
 	local out = {}
@@ -105,10 +135,27 @@ end
 
 ---@param ds_dir string
 ---@param coll_id string
+---@return boolean
+local function is_coll_dir(ds_dir, coll_id)
+	ds_dir = normalize_path(ds_dir)
+	return "" ~= vim.fn.glob(table.concat({ds_dir, "tasks", coll_id}, "/"))
+end
+
+---@param ds_dir string
+---@param coll_id string
 ---@return { [string]: string }? uids_to_icals
+---@return (decscribe.decsync.NoDsDir | decscribe.decsync.NoCollDir)?
 function M.retrieve_task_icals(ds_dir, coll_id)
 	-- Normalize input parameters:
 	ds_dir = normalize_path(ds_dir)
+	-- Ensure Decsync IO environment is present & correct:
+	if not M.is_decsync_dir(ds_dir) then
+		return nil, NoDsDir(ds_dir)
+	end
+	if not is_coll_dir(ds_dir, coll_id) then
+		return nil, NoCollDir(ds_dir, coll_id)
+	end
+	-- Retrieve the ICals:
 	local uid_to_updated_datetime = {}
 	local uid_to_ical = {}
 	for entry_str in run_iter('cat "$1"/tasks/"$2"/v2/*/??', ds_dir, coll_id) do
@@ -151,13 +198,65 @@ local function get_by_least_count(t)
 	return min_bucket
 end
 
+local function is_app_dir(ds_dir, coll_id, app_id)
+	ds_dir = normalize_path(ds_dir)
+	local info_path =
+		table.concat({ ds_dir, "tasks", coll_id, "v2", app_id, "info" }, "/")
+	if true then return 1 == vim.fn.filereadable(info_path) end
+	-- TODO check contents of the info file
+end
+
+function M.create_app_dir(ds_dir, coll_id, app_id)
+	error("TODO: create_app_dir")
+	error("TODO: %s/tasks/%s/local/%s/info: version: 2")
+	error("TODO: %s/tasks/%s/local/%s/sequences: {[app_name]: {[bucket_name]: entries_count}}")
+	error("TODO: copy name from other apps? (string)")
+	error("TODO: copy color from other apps? (#aabbcc)")
+	error("TODO: read supported-version of other apps? (2)")
+	error("TODO: write last-active-<app-id> in other apps' info? (YYYY-MM-DD)")
+end
+
+---@class (exact) decscribe.decsync.NoAppDir
+---@field noAppDir decscribe.decsync.NoAppDirModel
+
+---@class (exact) decscribe.decsync.NoAppDirModel
+---@field ds_dir string
+---@field coll_id string
+---@field app_id string
+
+---@param ds_dir string
+---@param coll_id string
+---@param app_id string
+---@return decscribe.decsync.NoAppDir
+local function NoAppDir(ds_dir, coll_id, app_id)
+	---@type decscribe.decsync.NoAppDir
+	return {
+		noAppDir = {
+			ds_dir = ds_dir,
+			coll_id = coll_id,
+			app_id = app_id,
+		}
+	}
+end
+
 ---@alias decscribe.decsync.Uid string
 
 ---@param ds_dir string
 ---@param app_id string
 ---@param coll_id string
 ---@param ical_updates { [decscribe.decsync.Uid]: string|false }
+---@return boolean success
+---@return decscribe.decsync.DecsyncError?
 function M.patch_task_icals(ds_dir, app_id, coll_id, ical_updates)
+	if not M.is_decsync_dir(ds_dir) then
+		return false, NoDsDir(ds_dir)
+	end
+	if not is_coll_dir(ds_dir, coll_id) then
+		return false, NoCollDir(ds_dir, coll_id)
+	end
+	if not is_app_dir(ds_dir, coll_id, app_id) then
+		return false, NoAppDir(ds_dir, coll_id, app_id)
+	end
 	local bucket_paths =
 		run('ls -1d "$1"/tasks/"$2"/v2/"$3"/??', ds_dir, coll_id, app_id)
 	---@alias BucketPath string
@@ -236,6 +335,7 @@ function M.patch_task_icals(ds_dir, app_id, coll_id, ical_updates)
 		)
 		bucket_counts[sel_bucket_path] = bucket_counts[sel_bucket_path] + 1
 	end -- ical creations
+	return true, nil
 end
 
 return M
